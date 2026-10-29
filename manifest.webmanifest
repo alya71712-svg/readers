@@ -1,0 +1,15 @@
+{
+  "name": "القوارئ العشر",
+  "short_name": "القوارئ",
+  "description": "مكتبة قوارئ مشروع القرآن كُتب في الإسكندرية",
+  "lang": "ar",
+  "dir": "rtl",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f7f1e7",
+  "theme_color": "#8b4e3a",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}

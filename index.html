@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#8b4e3a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="القوارئ العشر">
+<meta name="google" content="notranslate">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="icon" href="./icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="./icon.svg">
+<title>القوارئ العشر | مكتبة القرآن كُتب في الإسكندرية</title>
+<style>
+:root{--font-size:15px;--bg:#f7f1e7;--paper:#fffdf8;--ink:#463728;--muted:#7a6a58;--accent:#8b4e3a;--accent2:#6e3b2b;--line:#ddc8a8;--cell:#fff;--soft:#fff4df;--shadow:0 14px 40px rgba(15,23,42,.10)}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;padding:18px;background:var(--bg);color:var(--ink);font-family:"Tajawal",Tahoma,Arial,sans-serif;transition:background .25s,color .25s}
+.app{max-width:1280px;margin:auto;position:relative}
+.paper{background:var(--paper);border:1px solid color-mix(in srgb,var(--line) 70%,transparent);border-radius:22px;box-shadow:var(--shadow);overflow:hidden}
+.topbar{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:20px 24px;border-bottom:1px solid var(--line);background:linear-gradient(135deg,var(--paper),var(--soft))}
+.brand{display:flex;align-items:center;gap:13px}
+.brand-mark{width:44px;height:44px;display:grid;place-items:center;border-radius:14px;background:var(--accent);color:#fff;font-size:23px;box-shadow:0 8px 18px color-mix(in srgb,var(--accent) 35%,transparent)}
+h1{font-size:clamp(20px,3vw,30px);margin:0 0 4px}
+.subtitle{margin:0;color:var(--muted);font-size:13px}
+.date-box{text-align:left;white-space:nowrap}
+.date-label{font-size:12px;color:var(--muted);display:block}
+.today{font-weight:800;font-size:18px;color:var(--accent)}
+.font-control{position:relative}
+.font-button{width:38px;height:38px;padding:0;border-radius:10px;font-size:18px;background:var(--soft);color:var(--accent);border:1px solid var(--line)}
+.font-menu{display:none;position:absolute;top:44px;left:0;z-index:12;min-width:150px;padding:10px;background:var(--paper);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);text-align:center}
+.font-menu.open{display:block}
+.font-menu-title{display:block;margin-bottom:7px;color:var(--muted);font-size:12px}
+.font-actions{display:flex;align-items:center;justify-content:center;gap:8px}
+.font-actions button{padding:6px 11px}
+.font-value{min-width:45px;font-weight:800;color:var(--accent)}
+.layout{display:grid;grid-template-columns:1fr 250px;gap:20px;padding:22px}
+.workspace{min-width:0}
+.section-title{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0 0 14px}
+.section-title h2{margin:0;font-size:20px}
+.hint{font-size:12px;color:var(--muted)}
+button{border:0;border-radius:11px;padding:10px 15px;font:inherit;font-size:14px;font-weight:700;cursor:pointer;background:var(--accent);color:#fff;transition:transform .15s,filter .15s,background .15s}
+button:hover{filter:brightness(1.06);transform:translateY(-1px)}
+button.secondary{background:color-mix(in srgb,var(--muted) 85%,#000)}
+button.ghost{background:var(--soft);color:var(--accent);border:1px solid color-mix(in srgb,var(--accent) 20%,var(--line))}
+.search-row{display:flex;gap:9px;margin:0 0 14px}
+.search-row input{flex:1;min-width:0;padding:11px 14px;border:1px solid var(--line);border-radius:12px;background:var(--cell);color:var(--ink);font:inherit;font-size:15px;outline:0}
+.search-row input:focus{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 20%,transparent)}
+.resume{display:none;align-items:center;justify-content:space-between;gap:12px;margin:0 0 16px;padding:13px 16px;border:1px solid color-mix(in srgb,var(--accent) 40%,var(--line));border-radius:14px;background:var(--soft)}
+.resume.show{display:flex}
+.resume b{color:var(--accent)}
+.resume small{display:block;color:var(--muted);margin-top:3px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:14px}
+.card{position:relative;display:flex;flex-direction:column;gap:9px;padding:16px 16px 14px;border:1px solid var(--line);border-radius:16px;background:var(--cell);overflow:hidden;color:inherit;text-decoration:none;transition:transform .15s,box-shadow .15s,border-color .15s}
+.card::before{content:"";position:absolute;inset:0 0 auto 0;height:5px;background:var(--card-accent,var(--accent))}
+.card:hover{transform:translateY(-3px);box-shadow:var(--shadow);border-color:var(--card-accent,var(--accent))}
+.card:focus-visible{outline:3px solid color-mix(in srgb,var(--accent) 45%,transparent);outline-offset:2px}
+.card-top{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:4px}
+.num{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;background:var(--card-accent,var(--accent));color:#fff;font-weight:800;font-size:14px}
+.badge{font-size:11px;padding:3px 9px;border-radius:999px;background:var(--soft);color:var(--card-accent,var(--accent));font-weight:800;border:1px solid var(--line)}
+.badge.last{background:var(--card-accent,var(--accent));color:#fff;border-color:transparent}
+.badge.missing{background:#fee2e2;color:#b91c1c;border-color:#fecaca}
+.card h3{margin:2px 0 0;font-size:calc(var(--font-size) + 3px);line-height:1.4}
+.card p{margin:0;font-size:calc(var(--font-size) - 2px);line-height:1.7;color:var(--muted);flex:1}
+.card-foot{display:flex;align-items:center;justify-content:space-between;gap:8px;padding-top:9px;border-top:1px dashed var(--line);font-size:12px;color:var(--muted)}
+.card-foot .open{color:var(--card-accent,var(--accent));font-weight:800;font-size:14px}
+.card.missing{opacity:.62}
+.empty{padding:22px;border:1px dashed var(--line);border-radius:12px;color:var(--muted);text-align:center;grid-column:1/-1}
+.control-panel{border:1px solid var(--line);border-radius:18px;padding:14px;background:color-mix(in srgb,var(--paper) 88%,var(--soft));height:max-content;position:sticky;top:12px}
+.panel-heading{display:flex;align-items:center;justify-content:space-between;margin-bottom:11px}
+.panel-heading h3{margin:0;font-size:16px}
+.panel-toggle{position:absolute;top:11px;right:-1px;transform:translateX(100%);width:38px;height:38px;padding:0;border-radius:0 11px 11px 0;display:grid;place-items:center;background:var(--accent);font-size:18px}
+.nav-grid{display:grid;grid-template-columns:1fr;gap:7px}
+.nav-btn{width:100%;display:flex;align-items:center;gap:10px;justify-content:flex-start;margin:0;background:transparent;color:var(--ink);border:1px solid var(--line)}
+.nav-btn:hover{background:var(--soft);color:var(--accent);border-color:color-mix(in srgb,var(--accent) 40%,var(--line))}
+.nav-icon{font-size:18px;width:24px;text-align:center}
+.panel-note{font-size:12px;line-height:1.7;color:var(--muted);border-top:1px solid var(--line);margin-top:14px;padding-top:12px}
+.modal-backdrop{position:fixed;inset:0;background:rgba(15,23,42,.45);display:none;align-items:center;justify-content:center;padding:18px;z-index:20}
+.modal-backdrop.open{display:flex}
+.modal{width:min(760px,100%);max-height:90vh;overflow:auto;background:var(--paper);border-radius:20px;box-shadow:0 25px 70px rgba(0,0,0,.25);padding:22px}
+.modal-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px}
+.modal-head h2{margin:0;font-size:22px}
+.close{background:transparent;color:var(--muted);font-size:24px;padding:3px 10px}
+.modal-footer{margin-top:16px;display:flex;justify-content:flex-start;gap:9px}
+.theme-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+.theme-card{border:2px solid var(--line);background:var(--cell);color:var(--ink);padding:12px;border-radius:14px;text-align:right}
+.theme-card.selected{border-color:var(--accent)}
+.swatches{display:flex;gap:5px;margin-bottom:9px}
+.swatches i{height:28px;flex:1;border-radius:6px}
+.steps{margin:0;padding:0 20px 0 0;line-height:2}
+.steps code{direction:ltr;unicode-bidi:isolate;background:var(--soft);padding:1px 7px;border-radius:6px;font-size:13px}
+.stat-row{display:flex;justify-content:space-between;gap:10px;padding:9px 0;border-bottom:1px dashed var(--line)}
+.status{min-height:20px;margin-top:10px;font-size:13px;color:var(--accent)}
+body.panel-hidden .layout{grid-template-columns:1fr}
+body.panel-hidden .control-panel{display:none}
+body.panel-hidden .panel-toggle{position:fixed;right:0;top:50%;transform:translateY(-50%);border-radius:11px 0 0 11px;z-index:10}
+@media(max-width:760px){
+  body{padding:8px}
+  .topbar{padding:16px;align-items:flex-start;flex-wrap:wrap}
+  .date-box{text-align:right}
+  .layout{padding:13px;display:block}
+  .control-panel{position:static;margin-top:18px}
+  .panel-toggle{right:12px;top:12px;transform:none;border-radius:11px}
+  .brand-mark{width:38px;height:38px}
+  .today{font-size:15px}
+  .grid{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="paper">
+    <header class="topbar">
+      <div class="brand"><div class="brand-mark">📖</div><div><h1>القوارئ العشر</h1><p class="subtitle">مكتبة مشروع «القرآن كُتب في الإسكندرية» — قارئ لكل مؤلف أو موضوع</p></div></div>
+      <div class="date-box"><span class="date-label">تاريخ اليوم</span><span class="today" id="today"></span></div>
+      <div class="font-control"><button class="font-button" type="button" onclick="toggleFontMenu()" title="التحكم في حجم الخط" aria-label="التحكم في حجم الخط">A</button><div class="font-menu" id="fontMenu"><span class="font-menu-title">حجم خط البطاقات</span><div class="font-actions"><button type="button" onclick="changeFontSize(-1)">−</button><span class="font-value" id="fontValue">15</span><button type="button" onclick="changeFontSize(1)">+</button></div></div></div>
+    </header>
+    <main class="layout">
+      <section class="workspace">
+        <div class="resume" id="resume"><div><b id="resumeTitle"></b><small id="resumeWhen"></small></div><button type="button" id="resumeBtn">تابع القراءة</button></div>
+        <div class="section-title"><h2>اختر القارئ</h2><span class="hint" id="countHint"></span></div>
+        <div class="search-row"><input id="q" type="search" placeholder="ابحث باسم القارئ أو المؤلف أو الموضوع…" autocomplete="off" aria-label="بحث في القوارئ"></div>
+        <div class="grid" id="grid"></div>
+        <div class="status" id="status" role="status"></div>
+      </section>
+      <aside class="control-panel" id="controlPanel">
+        <div class="panel-heading"><h3>لوحة التحكم</h3><span>☰</span></div>
+        <div class="nav-grid">
+          <button class="nav-btn" type="button" onclick="openThemes()"><span class="nav-icon">◐</span>السيمات</button>
+          <button class="nav-btn" type="button" onclick="openStats()"><span class="nav-icon">▦</span>إحصاءات المكتبة</button>
+          <button class="nav-btn" type="button" onclick="openAdd()"><span class="nav-icon">✎</span>كيف أضيف أو أغيّر قارئاً</button>
+          <button class="nav-btn" type="button" onclick="recheck()"><span class="nav-icon">⟳</span>إعادة فحص الملفات</button>
+        </div>
+        <div class="panel-note">كل قارئ يحفظ علاماته وملاحظاته وتظليله ومكان توقفك على هذا المتصفح، ويبقى محفوظاً عند الرجوع إلى هذه الصفحة.</div>
+      </aside>
+    </main>
+  </div>
+  <button class="panel-toggle" id="togglePanel" type="button" onclick="togglePanel()" title="إظهار أو إخفاء لوحة التحكم" aria-label="إظهار أو إخفاء لوحة التحكم">☰</button>
+</div>
+
+<div class="modal-backdrop" id="modalBackdrop" onclick="backdropClose(event)"><div class="modal" id="modal"></div></div>
+
+<script>
+// ============================================================
+// قائمة القوارئ العشر — عدّل هذه القائمة فقط لتغيير ما يظهر في الموقع.
+// file: مسار ملف القارئ نسبةً لهذه الصفحة (ضعها في مجلد readers/)
+// texts: عدد النصوص داخل القارئ (للعرض فقط)  |  accent: لون شريط البطاقة
+// ============================================================
+const READERS=[
+ {id:'origen',   title:'أوريجانوس السكندري',      sub:'Origen',                 desc:'نصوص أوريجانوس ومراجعها — الإسكندرية في القرن الثالث.',                 texts:54, accent:'#8B4E3A', file:'readers/origen_reader.html'},
+ {id:'philo',    title:'فيلون السكندري',           sub:'Philo of Alexandria',    desc:'أعمال فيلون، وفيها التأويل الرمزي (الزوج = الحاكم، الزوجة = الجماعة).',   texts:48, accent:'#5B6F94', file:'readers/philo_reader.html'},
+ {id:'josephus', title:'يوسيفوس',                  sub:'Flavius Josephus',       desc:'نصوص يوسيفوس المؤرخ اليهودي الروماني.',                                    texts:31, accent:'#C9A84C', file:'readers/josephus_reader.html'},
+ {id:'heraclius',title:'هرقل',                      sub:'Heraclius',              desc:'المصادر الأساسية لعصر الإمبراطور هرقل وحروبه مع الفرس.',                  texts:22, accent:'#7A3B5E', file:'readers/heraclius_reader.html'},
+ {id:'heraclius-other',title:'مصادر هرقل الأجنبية',sub:'Heraclius — other sources',desc:'مصادر بالإنجليزية والفرنسية والإسبانية والبولندية.',                  texts:14, accent:'#2F6F73', file:'readers/another_heraclius_reader.html'},
+ {id:'filo-leop',title:'قارئ فيلو وليوب',          sub:'Filo / Leop',            desc:'مجموعة نصوص مرتبطة بفيلون (راجع الاسم).',                                  texts:14, accent:'#4A7C59', file:'readers/filo_leop_reader.html'},
+ {id:'heraclius-legend',title:'أسطورة هرقل',       sub:'Heraclius legend',       desc:'نصوص الأسطورة والتراث الشعبي حول هرقل.',                                    texts:11, accent:'#B5651D', file:'readers/heraclius_legend_reader.html'},
+ {id:'motherhood',title:'الأمومة',                  sub:'Motherhood',             desc:'نصوص عن الأمومة في التراث القديم.',                                         texts:8,  accent:'#C0506B', file:'readers/motherhood_reader.html'},
+ {id:'woman-filo',title:'المرأة في كتابات فيلو',   sub:'Woman in Philo',         desc:'كتابات فيلو عن المرأة والجماعة.',                                           texts:8,  accent:'#4A5E8A', file:'readers/woman_in_filo_writers_reader.html'},
+ {id:'template', title:'القالب الفارغ',             sub:'my_reader',              desc:'قارئ بلا كتب، يُنسخ منه أي قارئ جديد.',                                     texts:0,  accent:'#64748B', file:'readers/my_reader.html'}
+];
+
+const themes={
+ blue:{name:'أزرق هادئ',bg:'#eef2f5',paper:'#fff',ink:'#1e293b',accent:'#2563eb',accent2:'#1d4ed8',line:'#cbd5e1',soft:'#eff6ff'},
+ green:{name:'نعناع',bg:'#eef7f1',paper:'#fff',ink:'#16352a',accent:'#16805b',accent2:'#106344',line:'#b9d8c7',soft:'#e7f6ed'},
+ sand:{name:'ورق دافئ',bg:'#f7f1e7',paper:'#fffdf8',ink:'#463728',accent:'#a76b25',accent2:'#824d16',line:'#ddc8a8',soft:'#fff4df'},
+ earth:{name:'طين الإسكندرية',bg:'#f7f1e7',paper:'#fffdf8',ink:'#463728',accent:'#8b4e3a',accent2:'#6e3b2b',line:'#ddc8a8',soft:'#fff4df'},
+ purple:{name:'لافندر',bg:'#f3f0fa',paper:'#fff',ink:'#30264b',accent:'#7c4dba',accent2:'#5e3294',line:'#d5c7e9',soft:'#f2eafd'},
+ rose:{name:'وردي ناعم',bg:'#fbf0f2',paper:'#fff',ink:'#4b2630',accent:'#c94b6b',accent2:'#a53251',line:'#ebc4cf',soft:'#fff0f4'},
+ teal:{name:'بحري',bg:'#eaf5f6',paper:'#fff',ink:'#16383c',accent:'#087f8c',accent2:'#06636e',line:'#b8dfe1',soft:'#e1f5f7'},
+ graphite:{name:'رمادي أنيق',bg:'#e9ecef',paper:'#fff',ink:'#20252b',accent:'#495057',accent2:'#343a40',line:'#c6cbd0',soft:'#edf0f2'},
+ orange:{name:'مشمشي',bg:'#fff3eb',paper:'#fff',ink:'#492a1c',accent:'#e06d2d',accent2:'#bd4e17',line:'#f1c8b1',soft:'#fff0e6'},
+ navy:{name:'كحلي',bg:'#e9eef7',paper:'#f8fafc',ink:'#16243b',accent:'#315b9d',accent2:'#20447d',line:'#bcc9df',soft:'#e8effb'},
+ dark:{name:'ليلي',bg:'#111827',paper:'#1f2937',ink:'#f1f5f9',accent:'#60a5fa',accent2:'#3b82f6',line:'#475569',soft:'#263449',cell:'#182233'},
+ sky:{name:'سماوي',bg:'#eaf4fc',paper:'#fff',ink:'#12324a',accent:'#0284c7',accent2:'#0369a1',line:'#bcd9ee',soft:'#e0f0fb'},
+ olive:{name:'زيتوني',bg:'#f1f3e8',paper:'#fffffb',ink:'#2f3a1e',accent:'#6b7f2a',accent2:'#54651c',line:'#d3dab4',soft:'#eef2dc'},
+ coral:{name:'مرجاني',bg:'#fff1ee',paper:'#fff',ink:'#4a2520',accent:'#e5604d',accent2:'#c4452f',line:'#f2c6bd',soft:'#ffeae6'},
+ gold:{name:'ذهبي',bg:'#fbf6e6',paper:'#fffdf5',ink:'#43380f',accent:'#b8860b',accent2:'#8f6808',line:'#e6d6a0',soft:'#fbf1cc'},
+ maroon:{name:'عنابي',bg:'#f7eced',paper:'#fff',ink:'#3f1b22',accent:'#9b2c3f',accent2:'#761f2f',line:'#e3c0c6',soft:'#fbe9ec'},
+ ice:{name:'ثلجي',bg:'#f2f6fa',paper:'#fff',ink:'#1c2b3a',accent:'#5b7fa6',accent2:'#456589',line:'#d0dbe6',soft:'#e9f0f7'},
+ sage:{name:'مريمية',bg:'#edf2ee',paper:'#fbfdfb',ink:'#25332b',accent:'#5f8a72',accent2:'#48705a',line:'#c7d8cd',soft:'#e4efe8'},
+ midnight:{name:'منتصف الليل',bg:'#0b1220',paper:'#131c2e',ink:'#e6edf7',accent:'#7aa7ff',accent2:'#5b8cf0',line:'#2a3955',soft:'#1a2740',cell:'#0f1828'},
+ forestDark:{name:'غابة ليلية',bg:'#0d1713',paper:'#15231c',ink:'#e4f1e9',accent:'#4cc38a',accent2:'#2fa66f',line:'#2b4a3b',soft:'#1b2f25',cell:'#101c16'},
+ plumDark:{name:'برقوق',bg:'#16101f',paper:'#20172e',ink:'#efe8f8',accent:'#b389f0',accent2:'#9366d8',line:'#3d2f57',soft:'#2a1f3d',cell:'#1a1326'},
+ amberDark:{name:'كهرماني',bg:'#17120a',paper:'#221a0e',ink:'#f6ecd9',accent:'#f0a63a',accent2:'#d88a14',line:'#4a3a1d',soft:'#30240f',cell:'#1c150a'},
+ oled:{name:'أسود كامل',bg:'#000',paper:'#0a0a0a',ink:'#f5f5f5',accent:'#38bdf8',accent2:'#0ea5e9',line:'#2b2b2b',soft:'#151515',cell:'#0f0f0f'}
+};
+
+const K_THEME='readers_theme',K_FONT='readers_font',K_LAST='readers_last',K_PANEL='readers_panel_hidden';
+const $=s=>document.querySelector(s);
+const grid=$('#grid'),qEl=$('#q'),statusEl=$('#status'),modalBackdrop=$('#modalBackdrop'),modal=$('#modal');
+const store={get(k){try{return localStorage.getItem(k)}catch{return null}},set(k,v){try{localStorage.setItem(k,v)}catch{}}};
+let availability={};   // id -> true | false | undefined (لم يُفحص)
+
+function el(tag,props={},kids=[]){
+  const n=document.createElement(tag);
+  for(const [k,v] of Object.entries(props)){
+    if(k==='class')n.className=v;
+    else if(k==='text')n.textContent=v;
+    else if(k.startsWith('on'))n.addEventListener(k.slice(2),v);
+    else n.setAttribute(k,v);
+  }
+  [].concat(kids).forEach(c=>c&&n.appendChild(typeof c==='string'?document.createTextNode(c):c));
+  return n;
+}
+const norm=s=>String(s||'').toLowerCase().replace(/[ً-ٰٟـ]/g,'').replace(/[أإآ]/g,'ا').replace(/ى/g,'ي').replace(/ة/g,'ه');
+function getLast(){try{const v=JSON.parse(store.get(K_LAST)||'null');return v&&v.id?v:null}catch{return null}}
+function ago(ts){
+  const m=Math.round((Date.now()-ts)/60000);
+  if(m<1)return 'الآن';
+  if(m<60)return `منذ ${m} دقيقة`;
+  const h=Math.round(m/60);
+  if(h<24)return `منذ ${h} ساعة`;
+  return `منذ ${Math.round(h/24)} يوم`;
+}
+
+// ---------- العرض ----------
+function render(){
+  const q=norm(qEl.value.trim()),last=getLast();
+  const list=READERS.filter(r=>!q||norm([r.title,r.sub,r.desc].join(' ')).includes(q));
+  grid.replaceChildren();
+  if(!list.length)grid.appendChild(el('div',{class:'empty',text:'لا توجد نتائج مطابقة للبحث.'}));
+  list.forEach(r=>{
+    const idx=READERS.indexOf(r)+1,missing=availability[r.id]===false;
+    const badge=missing?el('span',{class:'badge missing',text:'الملف غير موجود'}):(last&&last.id===r.id?el('span',{class:'badge last',text:'آخر ما قرأت'}):el('span',{class:'badge',text:r.texts?`${r.texts} نصاً`:'فارغ'}));
+    const a=el('a',{class:'card'+(missing?' missing':''),href:r.file,style:`--card-accent:${r.accent}`,'data-id':r.id,onclick:()=>markOpened(r)},[
+      el('div',{class:'card-top'},[el('span',{class:'num',text:String(idx)}),badge]),
+      el('h3',{text:r.title}),
+      el('p',{text:r.desc}),
+      el('div',{class:'card-foot'},[el('span',{text:r.sub,dir:'ltr'}),el('span',{class:'open',text:'فتح القارئ ←'})])
+    ]);
+    grid.appendChild(a);
+  });
+  $('#countHint').textContent=q?`${list.length} من ${READERS.length}`:`${READERS.length} قوارئ`;
+  renderResume();
+}
+function renderResume(){
+  const last=getLast(),r=last&&READERS.find(x=>x.id===last.id),box=$('#resume');
+  if(!r){box.classList.remove('show');return}
+  $('#resumeTitle').textContent=r.title;
+  $('#resumeWhen').textContent='آخر فتح: '+ago(last.ts);
+  $('#resumeBtn').onclick=()=>{markOpened(r);location.href=r.file};
+  box.classList.add('show');
+}
+function markOpened(r){store.set(K_LAST,JSON.stringify({id:r.id,ts:Date.now()}))}
+
+// ---------- فحص وجود الملفات (على الاستضافة فقط) ----------
+async function checkFiles(){
+  if(!/^https?:$/.test(location.protocol))return;
+  statusEl.textContent='جارٍ فحص ملفات القوارئ…';
+  await Promise.all(READERS.map(async r=>{
+    try{
+      const res=await fetch(r.file,{method:'HEAD',cache:'no-store'});
+      availability[r.id]=res.ok;
+    }catch{availability[r.id]=undefined}
+  }));
+  const missing=READERS.filter(r=>availability[r.id]===false).length;
+  statusEl.textContent=missing?`⚠ ${missing} من الملفات غير موجودة في مجلد readers — راجع «كيف أضيف أو أغيّر قارئاً».`:'';
+  render();
+}
+function recheck(){availability={};render();checkFiles()}
+
+// ---------- السيمات ----------
+function applyTheme(key){
+  const t=themes[key]||themes.earth,s=document.documentElement.style;
+  s.setProperty('--bg',t.bg);s.setProperty('--paper',t.paper);s.setProperty('--ink',t.ink);
+  s.setProperty('--accent',t.accent);s.setProperty('--accent2',t.accent2);s.setProperty('--line',t.line);
+  s.setProperty('--soft',t.soft);s.setProperty('--cell',t.cell||'#fff');
+  s.setProperty('--muted',`color-mix(in srgb,${t.ink} 62%,${t.paper})`);
+  const m=document.querySelector('meta[name="theme-color"]');if(m)m.content=t.accent;
+  store.set(K_THEME,key);
+}
+function openThemes(){
+  const cur=store.get(K_THEME)||'earth';
+  const g=el('div',{class:'theme-grid'});
+  Object.entries(themes).forEach(([key,t])=>{
+    g.appendChild(el('button',{type:'button',class:'theme-card'+(key===cur?' selected':''),onclick:()=>{applyTheme(key);openThemes()}},[
+      el('div',{class:'swatches'},[t.bg,t.paper,t.accent,t.soft].map(c=>el('i',{style:`background:${c};border:1px solid ${t.line}`}))),
+      el('span',{text:t.name})
+    ]));
+  });
+  openModal('السيمات',g);
+}
+
+// ---------- الخط واللوحة ----------
+function setFont(n){n=Math.max(12,Math.min(24,n));document.documentElement.style.setProperty('--font-size',n+'px');$('#fontValue').textContent=n;store.set(K_FONT,String(n))}
+function changeFontSize(d){setFont((Number(store.get(K_FONT))||15)+d)}
+function toggleFontMenu(){$('#fontMenu').classList.toggle('open')}
+function togglePanel(){const h=document.body.classList.toggle('panel-hidden');store.set(K_PANEL,h?'1':'0')}
+
+// ---------- النوافذ ----------
+function openModal(title,body,footer){
+  modal.replaceChildren(
+    el('div',{class:'modal-head'},[el('h2',{text:title}),el('button',{class:'close',type:'button',onclick:closeModal,'aria-label':'إغلاق',text:'×'})]),
+    body,
+    footer||el('div',{class:'modal-footer'},[el('button',{class:'secondary',type:'button',onclick:closeModal,text:'إغلاق'})])
+  );
+  modalBackdrop.classList.add('open');
+}
+function closeModal(){modalBackdrop.classList.remove('open')}
+function backdropClose(e){if(e.target===modalBackdrop)closeModal()}
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal()});
+
+function openStats(){
+  const total=READERS.reduce((s,r)=>s+(r.texts||0),0),filled=READERS.filter(r=>r.texts>0).length;
+  const row=(a,b)=>el('div',{class:'stat-row'},[el('span',{text:a}),el('b',{text:String(b)})]);
+  const body=el('div',{},[row('عدد القوارئ',READERS.length),row('قوارئ فيها نصوص',filled),row('مجموع النصوص',total)]);
+  READERS.filter(r=>r.texts>0).sort((a,b)=>b.texts-a.texts).forEach(r=>body.appendChild(row(r.title,r.texts)));
+  openModal('إحصاءات المكتبة',body);
+}
+function openAdd(){
+  const li=t=>el('li',{},[t]);
+  const code=t=>el('code',{text:t});
+  const body=el('div',{},[
+    el('ol',{class:'steps'},[
+      el('li',{},['ضع ملف كل قارئ داخل مجلد ',code('readers'),' بجانب ',code('index.html'),' (المستودع نفسه على GitHub).']),
+      li('أسماء الملفات المتوقعة مكتوبة في القائمة READERS أعلى الكود في index.html (حقل file).'),
+      li('لتغيير اسم قارئ أو وصفه أو لونه أو عدد نصوصه: عدّل سطره في تلك القائمة فقط.'),
+      li('لإضافة قارئ جديد: انسخ سطراً كاملاً وغيّر id وtitle وfile.'),
+      li('الملفات الأكبر من 25 ميجا لا يقبلها GitHub عبر الواجهة؛ استخدم الرفع من تطبيق Git أو GitHub Desktop.')
+    ])
+  ]);
+  openModal('كيف أضيف أو أغيّر قارئاً',body);
+}
+
+// ---------- البدء ----------
+(function init(){
+  $('#today').textContent=new Date().toLocaleDateString('ar-EG',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+  applyTheme(store.get(K_THEME)||'earth');
+  setFont(Number(store.get(K_FONT))||15);
+  if(store.get(K_PANEL)==='1')document.body.classList.add('panel-hidden');
+  qEl.addEventListener('input',render);
+  render();
+  checkFiles();
+})();
+</script>
+</body>
+</html>
