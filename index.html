@@ -129,8 +129,9 @@ body.panel-hidden .panel-toggle{position:fixed;right:0;top:50%;transform:transla
           <button class="nav-btn" type="button" onclick="openStats()"><span class="nav-icon">▦</span>إحصاءات المكتبة</button>
           <button class="nav-btn" type="button" onclick="openAdd()"><span class="nav-icon">✎</span>كيف أضيف أو أغيّر قارئاً</button>
           <button class="nav-btn" type="button" onclick="recheck()"><span class="nav-icon">⟳</span>إعادة فحص الملفات</button>
+          <button class="nav-btn" type="button" onclick="openCloud()"><span class="nav-icon">☁</span>المزامنة السحابية</button>
         </div>
-        <div class="panel-note">كل قارئ يحفظ علاماته وملاحظاته وتظليله ومكان توقفك على هذا المتصفح، ويبقى محفوظاً عند الرجوع إلى هذه الصفحة.</div>
+        <div class="panel-note">كل قارئ يحفظ علاماته وملاحظاته وتظليله ومكان توقفك على هذا المتصفح، وتُنسخ سحابياً عند تفعيل «المزامنة السحابية» لتظهر على أي جهاز.</div>
       </aside>
     </main>
   </div>
@@ -139,6 +140,8 @@ body.panel-hidden .panel-toggle{position:fixed;right:0;top:50%;transform:transla
 
 <div class="modal-backdrop" id="modalBackdrop" onclick="backdropClose(event)"><div class="modal" id="modal"></div></div>
 
+<script src="cloud-config.js?v=1"></script>
+<script src="cloud-sync.js?v=1"></script>
 <script>
 // ============================================================
 // قائمة القوارئ العشر — عدّل هذه القائمة فقط لتغيير ما يظهر في الموقع.
@@ -305,6 +308,66 @@ function openStats(){
   const body=el('div',{},[row('عدد القوارئ',READERS.length),row('قوارئ فيها نصوص',filled),row('مجموع النصوص',total)]);
   READERS.filter(r=>r.texts>0).sort((a,b)=>b.texts-a.texts).forEach(r=>body.appendChild(row(r.title,r.texts)));
   openModal('إحصاءات المكتبة',body);
+}
+function openCloud(){
+  const RC=window.ReaderCloud;
+  if(!RC||!RC.configured()){
+    openModal('المزامنة السحابية',el('div',{},[
+      el('p',{text:'المزامنة السحابية غير مفعّلة بعد. أنشئي الجدول في Supabase بتشغيل ملف supabase-setup.sql مرة واحدة، ثم ضعي المفتاح العام (Publishable key) في ملف cloud-config.js.'}),
+      el('p',{text:'إلى ذلك الحين تعمل القوارئ كما كانت: الحفظ على هذا المتصفح فقط.'})
+    ]));
+    return;
+  }
+  const st=RC.status(), code=RC.getCode();
+  const msg=el('div',{class:'status',role:'status',style:'min-height:20px;margin:8px 0'});
+  const say=t=>{msg.textContent=t};
+  const body=el('div',{});
+  const fmt=c=>c.replace(/(.{5})(?=.)/g,'$1-');
+  if(!code){
+    const inp=el('input',{type:'text',placeholder:'الصقي هنا رمز المزامنة من جهازك الآخر',dir:'ltr',autocomplete:'off',style:'width:100%;padding:10px;margin:6px 0;border-radius:10px;border:1px solid var(--line)'});
+    body.append(
+      el('p',{text:'الرمز السرّي هو مفتاح بياناتك: من يملكه يصل إلى إشاراتك وتظليلك. لا حاجة لحساب أو كلمة مرور.'}),
+      el('button',{type:'button',text:'إنشاء رمز لهذا الجهاز (أول مرة)',onclick:async()=>{
+        RC.setCode(RC.genCode()); say('جارٍ رفع بياناتك الحالية…');
+        const r=await RC.syncAll(); const ok=r.filter(x=>x.ok).length;
+        say(ok===r.length?'✓ تم الرفع. احفظي الرمز الظاهر الآن ثم أدخليه في أجهزتك الأخرى.':'⚠ تعذّر رفع '+(r.length-ok)+' قارئ — تحقق من الاتصال وأعيدي المحاولة.');
+        openCloud();
+      }}),
+      el('hr'),
+      el('p',{text:'لديّ رمز من جهاز آخر:'}), inp,
+      el('button',{type:'button',class:'secondary',text:'ربط هذا الجهاز وسحب بياناتي',onclick:async()=>{
+        if(!RC.setCode(inp.value)){say('الرمز غير صالح — 20 حرفاً/رقماً (تُهمل الشرطات والمسافات).');return}
+        say('جارٍ الدمج مع السحابة…');
+        const r=await RC.syncAll(); const ok=r.filter(x=>x.ok).length;
+        say(ok===r.length?'✓ تم الربط ودُمجت بياناتك مع السحابة.':'⚠ تعذّرت مزامنة '+(r.length-ok)+' قارئ.');
+        openCloud();
+      }}),
+      msg
+    );
+  }else{
+    const shown=el('code',{text:'•••••-•••••-•••••-•••••',dir:'ltr',style:'font-size:17px;letter-spacing:1px'});
+    let vis=false;
+    body.append(
+      el('p',{text:'هذا الجهاز مرتبط بالسحابة. أدخلي الرمز نفسه في أي جهاز آخر لترَي الإشارات والتظليل نفسها.'}),
+      el('div',{style:'margin:8px 0'},[shown]),
+      el('div',{class:'modal-footer',style:'justify-content:flex-start;gap:8px;flex-wrap:wrap'},[
+        el('button',{type:'button',class:'secondary',text:'إظهار/إخفاء الرمز',onclick:()=>{vis=!vis;shown.textContent=vis?fmt(code):'•••••-•••••-•••••-•••••'}}),
+        el('button',{type:'button',class:'secondary',text:'نسخ الرمز',onclick:async()=>{try{await navigator.clipboard.writeText(fmt(code));say('✓ نُسخ الرمز')}catch{say('تعذّر النسخ — أظهري الرمز وانسخيه يدوياً')}}})
+      ]),
+      el('p',{text:st.lastOk?('آخر مزامنة ناجحة من قارئ مفتوح: '+ago(st.lastOk)):'يزامن كل قارئ نفسه تلقائياً عند فتحه وبعد كل تظليل أو إشارة.'}),
+      el('button',{type:'button',text:'مزامنة كل القوارئ الآن',onclick:async()=>{
+        say('جارٍ المزامنة…');
+        const r=await RC.syncAll((i,n)=>say('جارٍ المزامنة… '+i+' / '+n)); const ok=r.filter(x=>x.ok).length;
+        say(ok===r.length?'✓ تمت مزامنة القوارئ العشر.':'⚠ نجحت '+ok+' من '+r.length+' — أعيدي المحاولة عند توفر اتصال أفضل.');
+      }}),
+      el('hr'),
+      el('button',{type:'button',class:'secondary',text:'فصل هذا الجهاز عن السحابة',onclick:()=>{
+        if(confirm('سيتوقف هذا الجهاز عن المزامنة، وتبقى بياناته المحلية كما هي وبياناتك في السحابة لا تُحذف. متابعة؟')){RC.clearCode();openCloud()}
+      }}),
+      msg
+    );
+  }
+  openModal('المزامنة السحابية',body);
 }
 function openAdd(){
   const li=t=>el('li',{},[t]);

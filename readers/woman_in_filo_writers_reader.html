@@ -409,6 +409,8 @@ textarea.ab-inp{resize:vertical;min-height:180px;line-height:1.6;font-family:Geo
 /* فهرس الكتاب: لا يُحسب تخطيط الصفوف البعيدة عن الشاشة (يسرّع أول فتح للفهرس الطويل) */
 #btoc-body .toc-item{content-visibility:auto;contain-intrinsic-size:auto 30px}
 </style>
+<script src="../cloud-config.js?v=1"></script>
+<script src="../cloud-sync.js?v=1"></script>
 </head>
 <body>
 
@@ -1113,6 +1115,7 @@ function saveUserDataLocal(){
       lastBookId: (cur>=0 && library[cur]) ? library[cur].id : null
     };
     localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(payload));
+    try{ if(window.ReaderCloud) ReaderCloud.schedulePush(); }catch(_e){} // مزامنة سحابية (cloud-sync.js) — لا تؤثر على الحفظ المحلي إن غابت
   }catch(err){
     localStorageOK = false; // نتجنّب محاولات متكررة فاشلة (وضع تصفح خاص، أو تخزين معطَّل)
   }
@@ -4440,6 +4443,32 @@ function init(){
   // تصحيح إضافي بعد استقرار الصفحة تماماً: إن كانت ترجمة كروم التلقائية (أو
   // أي إعادة رسم متأخرة أخرى) قد غيّرت الارتفاع الكلي للصفحة بعد استعادتنا
   // الأولى للموضع أعلاه، هذه المحاولة الثانية تصحّحه على الارتفاع النهائي.
+  /* ===== المزامنة السحابية (Supabase) — طبقة فوق الحفظ المحلي، لا تستبدله =====
+     الدمج يتحد بين جهازك والسحابة (لا يفقد إشارة ولا تظليلاً)، والحذف ينتقل عبر شواهد حذف.
+     لا تعيد بناء النص الحالي: تُطبَّق التظليلات الجديدة فقط، وتُتجاوز أثناء ترجمة كروم حتى لا تنهار. */
+  try{
+    if(window.ReaderCloud) ReaderCloud.attach({
+      readerKey: LOCAL_STORAGE_KEY,
+      getPayload: function(){ return { bookmarks:bookmarks, notes:notes, savedThemes:savedThemes, readStatus:readStatus, readingPosition:readingPosition }; },
+      setPayload: function(d){ bookmarks = d.bookmarks; notes = d.notes; savedThemes = d.savedThemes; readStatus = d.readStatus; readingPosition = d.readingPosition; },
+      toast: toast,
+      afterMerge: function(info){
+        ReaderCloud.quiet(function(){ saveUserDataLocal(); });
+        if(info.readStatus) buildSB();
+        renderBM(); renderNotes(); renderSavedThemes();
+        var hasBook = cur>=0 && library[cur];
+        if(info.bookmarks && hasBook && !isChromeTranslated()){
+          applyPersistentHighlights(document.getElementById('bookText'), library[cur]);
+        }
+        var c1 = document.getElementById('cw1');
+        var atTop = (window.scrollY||0) < 80 && ((c1 && c1.scrollTop)||0) < 80;
+        if(info.first && info.positionFor && hasBook && info.positionFor.indexOf(library[cur].id) >= 0 && atTop && !isChromeTranslated()){
+          restoreScrollForCurrentBook();
+        }
+        if(info.first || info.bookmarks || info.notes) toast('☁ تمت مزامنة إشاراتك وتظليلك مع السحابة');
+      }
+    });
+  }catch(_e){ console.warn('cloud attach', _e); }
   setTimeout(function(){ if(!isChromeTranslated()) restoreScrollForCurrentBook(); }, 800);
 }
 function tagUIChromeNoTranslate(){
