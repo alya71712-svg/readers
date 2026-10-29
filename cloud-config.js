@@ -5,5 +5,5 @@
    اتركي key فارغاً لتعطيل المزامنة؛ تبقى القوارئ تحفظ محلياً كما كانت. */
 window.READER_CLOUD_CONFIG = {
   url: 'https://usylwbhpzkfyquhzoisg.supabase.co',
-  key: ''
+  key: 'sb_publishable_ds20e03PIrsYnz7_xiEudg_scUTF-27'
 };
