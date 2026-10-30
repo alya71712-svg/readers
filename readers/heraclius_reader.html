@@ -366,7 +366,7 @@ body.light{--bg:#f5f0e4;--bg2:#ede6d0;--bg3:#e0d8bc;--text:#1a1408;--text2:#5a4a
 
 /* SELECTION POPUP */
 #sel-popup{position:fixed;display:none;grid-template-columns:repeat(3,1fr);place-items:center;background:var(--bg2);border:1px solid var(--gold);border-radius:6px;padding:7px;gap:6px;z-index:500;box-shadow:0 4px 20px rgba(0,0,0,.5)}
-#sel-popup.show{display:grid}
+#sel-popup.show{display:grid;max-height:calc(100vh - 16px);overflow-y:auto}
 #sel-popup button{background:none;border:1px solid var(--border);color:var(--text2);padding:3px 9px;cursor:pointer;font-size:11px;border-radius:3px;font-family:sans-serif}
 #sel-popup button:hover{border-color:var(--gold);color:var(--gold)}
 .hl-swatch{width:16px;height:16px;border-radius:50%;border:1px solid rgba(255,255,255,.35);cursor:pointer;padding:0;background:none}
@@ -4377,7 +4377,13 @@ function handleSelectionUpdate(){
     popup.classList.add('show'); // نظهرها أولاً حتى نقيس عرضها الفعلي (عدد الأزرار متغيّر وليس ثابتاً)
     const pw=popup.offsetWidth, m=8;
     popup.style.left=Math.max(m,Math.min(rect.left,window.innerWidth-pw-m))+'px';
-    popup.style.top=(rect.bottom+8)+'px';
+    // الموضع الرأسي: تحت التحديد إن اتسع المكان، وإلا فوقه، وإلا (تحديد يملأ الشاشة) تُثبَّت أسفل الشاشة — فلا يُقصّ جزء منها خارج الشاشة
+    const ph=popup.offsetHeight, vh=(window.visualViewport&&window.visualViewport.height)||window.innerHeight;
+    const vTop=Math.max(rect.top,0), vBot=Math.min(rect.bottom,vh);
+    let top=vBot+8;
+    if(top+ph>vh-m) top=vTop-ph-8;
+    if(top<m || top+ph>vh-m) top=Math.max(m,vh-ph-m);
+    popup.style.top=top+'px';
   } else hideSelPopup();
 }
 document.addEventListener('mouseup', e => { setTimeout(handleSelectionUpdate,10); });
