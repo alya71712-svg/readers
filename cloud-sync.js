@@ -71,6 +71,9 @@ function rpc(name, args, keepalive){
 
 /* ---------- الدمج (دالة نقية قابلة للاختبار) ---------- */
 function keyOf(x){ return x.bookId + '|' + x.ts; }
+/* توقيع الإشارة = مفتاحها + وقت آخر تعديل لملاحظتها (nts). بدون nts لا يُرى تعديل نص ملاحظة على إشارة
+   موجودة أصلاً (المفتاح لم يتغيّر) فلا يُرفع ولا يصل للأجهزة الأخرى. */
+function bmSig(x){ return keyOf(x) + '~' + (x.nts || 0); }
 function posTs(p){ return Math.max((p && p.ts) || 0, (p && p.pidTs) || 0); }
 function emptyTomb(){ return { b:{}, n:{}, t:{} }; }
 function mergeTomb(a, b, now){
@@ -126,7 +129,8 @@ function merge(local, remote, state, now){
       var k = keyOf(x);
       if(tomb[group][k]) return;
       if(!(k in map)) order.push(k);
-      map[k] = x;                       // المحلي يتقدّم على البعيد عند نفس المفتاح
+      // المحلي يتقدّم على البعيد عند نفس المفتاح، إلا إن كانت ملاحظة البعيد (nts) أحدث من ملاحظة المحلي
+      if(!(k in map) || (x.nts || 0) >= (map[k].nts || 0)) map[k] = x;
     });
     return order.map(function(k){ return map[k]; }).sort(function(a,b){ return a.ts - b.ts; });
   }
@@ -151,7 +155,7 @@ function merge(local, remote, state, now){
 
   var merged = { bookmarks:bookmarks, notes:notes, savedThemes:themes, readStatus:readStatus, readingPosition:pos };
   var info = {
-    bookmarks: sigKeys(bookmarks, keyOf) !== sigKeys(lb, keyOf),
+    bookmarks: sigKeys(bookmarks, bmSig) !== sigKeys(lb, bmSig),
     notes: sigKeys(notes, keyOf) !== sigKeys(ln, keyOf),
     themes: themes.slice().sort().join('\u0001') !== lt.slice().sort().join('\u0001'),
     readStatus: Object.keys(readStatus).sort().join(',') !== Object.keys(local.readStatus || {}).filter(function(k){ return local.readStatus[k]; }).sort().join(','),
@@ -164,7 +168,7 @@ function merge(local, remote, state, now){
 function sigKeys(arr, fn){ return (arr||[]).map(fn).sort().join('\u0001'); }
 function signature(d, tomb){
   var rp = d.readingPosition || {}, rps = Object.keys(rp).sort().map(function(k){ return k + ':' + posTs(rp[k]); }).join(',');
-  return [ sigKeys(d.bookmarks, keyOf), sigKeys(d.notes, keyOf), (d.savedThemes||[]).slice().sort().join('\u0001'),
+  return [ sigKeys(d.bookmarks, bmSig), sigKeys(d.notes, keyOf), (d.savedThemes||[]).slice().sort().join('\u0001'),
            Object.keys(d.readStatus||{}).sort().join(','), rps,
            Object.keys(tomb.b).sort().join(','), Object.keys(tomb.n).sort().join(','), Object.keys(tomb.t).sort().join('\u0001') ].join('\u0002');
 }

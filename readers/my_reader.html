@@ -361,6 +361,25 @@ body.light{--bg:#f5f0e4;--bg2:#ede6d0;--bg3:#e0d8bc;--text:#1a1408;--text2:#5a4a
 #sel-popup button:hover{border-color:var(--gold);color:var(--gold)}
 .hl-swatch{width:16px;height:16px;border-radius:50%;border:1px solid rgba(255,255,255,.35);cursor:pointer;padding:0;background:none}
 .persist-hl{border-radius:3px;padding:0 1px;box-decoration-break:clone;-webkit-box-decoration-break:clone}
+/* ملاحظة الإشارة المرجعية: مربع صغير بجوار كل تظليل (✎ باهت حتى تكتب ملاحظة، ثم 📝 مُلوَّن بعد الحفظ).
+   الرمز يُرسَم بـ ::before فلا يدخل في textContent، فلا تنزاح مواضع التظليل ولا البحث ولا أرقام الفقرات. */
+.bm-note-chip{display:inline-block;vertical-align:middle;box-sizing:border-box;min-width:20px;height:20px;margin:0 3px;padding:0 2px;border:1px dashed var(--border);border-radius:5px;background:transparent;color:var(--text2);font:11px/18px sans-serif;text-align:center;cursor:pointer;opacity:.55;-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent}
+.bm-note-chip::before{content:'\270E'}
+.bm-note-chip.has{border:1px solid var(--gold);background:var(--bg2);color:var(--gold);opacity:1;box-shadow:0 1px 4px rgba(0,0,0,.35)}
+.bm-note-chip.has::before{content:'\1F4DD'}
+.bm-note-chip:hover,.bm-note-chip:focus-visible{opacity:1;border-color:var(--gold);color:var(--gold)}
+/* نافذة كتابة الملاحظة: fixed تغطي الشاشة كلها (بلا حساب إحداثيات)، تبدأ من الأعلى كي لا تحجبها لوحة مفاتيح الجوال */
+#bmnote-ov{position:fixed;top:0;right:0;bottom:0;left:0;display:none;align-items:flex-start;justify-content:center;background:rgba(0,0,0,.55);z-index:900;padding:7vh 12px 12px;overflow:auto}
+#bmnote-ov.show{display:flex}
+#bmnote-box{width:100%;max-width:520px;box-sizing:border-box;background:var(--bg2);border:1px solid var(--gold);border-radius:8px;padding:12px;box-shadow:0 8px 32px rgba(0,0,0,.6);direction:rtl}
+#bmnote-ttl{font:700 13px sans-serif;color:var(--gold);margin-bottom:6px}
+#bmnote-ctx{font-size:12px;line-height:1.5;color:var(--text2);border-right:3px solid var(--gold);padding:2px 8px;margin-bottom:8px;max-height:4.6em;overflow:hidden}
+#bmnote-inp{width:100%;box-sizing:border-box;min-height:130px;resize:vertical;background:var(--bg3);color:var(--text);border:1px solid var(--border);border-radius:5px;padding:8px;font-size:16px;line-height:1.6;font-family:inherit}
+#bmnote-btns{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+#bmnote-btns .tbtn{flex:1;min-width:90px}
+.bmi-note-btn{float:right;background:none;border:1px solid var(--border);border-radius:4px;color:var(--text2);cursor:pointer;font-size:12px;padding:0 5px;margin:0 0 0 4px;line-height:18px}
+.bmi-note-btn:hover{border-color:var(--gold);color:var(--gold)}
+.bmi-note{margin-top:6px;padding:5px 8px;border:1px solid var(--gold);border-radius:4px;color:var(--text);font-style:normal;font-size:12px;line-height:1.55;white-space:pre-wrap;font-family:sans-serif}
 /* تمييز مؤقت (3 ثوانٍ) لشارة رقم الفقرة عند الانتقال التقريبي إليها —
    حين وُجدت الفقرة نفسها عبر pid لكن تعذّر إيجاد نص المقطع المحفوظ حرفياً
    داخلها (كأن تكون ترجمة كروم غيّرت صياغتها). متقطّع عمداً كي يُفرَّق
@@ -409,7 +428,7 @@ textarea.ab-inp{resize:vertical;min-height:180px;line-height:1.6;font-family:Geo
 #btoc-body .toc-item{content-visibility:auto;contain-intrinsic-size:auto 30px}
 </style>
 <script src="../cloud-config.js?v=1"></script>
-<script src="../cloud-sync.js?v=1"></script>
+<script src="../cloud-sync.js?v=2"></script>
 </head>
 <body>
 
@@ -654,6 +673,20 @@ textarea.ab-inp{resize:vertical;min-height:180px;line-height:1.6;font-family:Geo
     <div style="display:flex;gap:7px">
       <button class="tbtn" onclick="closeAddBook()" style="flex:1">إلغاء</button>
       <button class="tbtn on" onclick="submitAddBook()" style="flex:1;border-color:var(--green);color:var(--green)">✓ إضافة إلى المكتبة</button>
+    </div>
+  </div>
+</div>
+
+<!-- ملاحظة على الإشارة المرجعية: تُفتح بالضغط على المربع الصغير بجوار أي تظليل أو من لوحة الإشارات -->
+<div id="bmnote-ov" translate="no">
+  <div id="bmnote-box" role="dialog" aria-modal="true" aria-labelledby="bmnote-ttl">
+    <div id="bmnote-ttl">📝 ملاحظة على الإشارة المرجعية</div>
+    <div id="bmnote-ctx" dir="auto"></div>
+    <textarea id="bmnote-inp" maxlength="5000" placeholder="اكتب ملاحظتك هنا: لماذا ظلّلت هذه الفقرة، وما أهميتها؟"></textarea>
+    <div id="bmnote-btns">
+      <button type="button" class="tbtn on" onclick="saveBmNote()" style="border-color:var(--green);color:var(--green)">💾 حفظ</button>
+      <button type="button" class="tbtn" id="bmnote-del" onclick="deleteBmNote()">🗑 حذف الملاحظة</button>
+      <button type="button" class="tbtn" onclick="closeBmNote()">إلغاء</button>
     </div>
   </div>
 </div>
@@ -3768,7 +3801,7 @@ function applyPersistentHighlights(container, book){
       }
     }
     if(idx < 0) idx = full.indexOf(q);
-    if(idx>=0){ ranges.push({start:idx, end:idx+q.length, color:m.color}); container._hlDone.add(m.ts); }
+    if(idx>=0){ ranges.push({start:idx, end:idx+q.length, color:m.color, ts:m.ts}); container._hlDone.add(m.ts); }
   });
   if(!ranges.length) return;
   ranges.sort((a,b)=>a.start-b.start);
@@ -3791,6 +3824,7 @@ function applyPersistentHighlights(container, book){
       span.style.background = r.color;
       span.textContent = node.nodeValue.slice(s-nodeStart, e-nodeStart);
       frag.appendChild(span);
+      if(e >= r.end) frag.appendChild(makeBmNoteChip(r.ts, book.id)); // مربع الملاحظة بعد آخر جزء من هذا التظليل فقط
       cursor = e;
     });
     if(cursor < nodeEnd) frag.appendChild(document.createTextNode(node.nodeValue.slice(cursor-nodeStart)));
@@ -3845,8 +3879,9 @@ function renderBM(){
         const d=document.createElement('div'); d.className='bmi';
         const dot = b.color ? '<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:'+b.color.replace(',.4)',',1)')+';margin-left:5px;vertical-align:middle"></span>' : '';
         const preview = b.snip.length>80 ? b.snip.slice(0,80)+'…' : b.snip;
-        d.innerHTML='<button class="del-btn" onclick="delBM('+b.ts+',event)">✕</button><div class="bmi-s">'+dot+escapeHtml(preview)+'</div>';
-        d.onclick=(e)=>{ if(e.target.classList.contains('del-btn'))return; jumpToSnippet(b.bookId, b.snip, b.ratio, b.pid); closePanel('bmp'); };
+        d.innerHTML='<button class="del-btn" onclick="delBM('+b.ts+',event)">✕</button><button class="bmi-note-btn" type="button" title="ملاحظة على الإشارة">'+(b.note?'📝':'✎')+'</button><div class="bmi-s">'+dot+escapeHtml(preview)+'</div>'+(b.note?'<div class="bmi-note">'+escapeHtml(b.note)+'</div>':'');
+        d.querySelector('.bmi-note-btn').onclick=(ev)=>{ ev.stopPropagation(); openBmNote(b.ts, b.bookId); };
+        d.onclick=(e)=>{ if(e.target.closest('.del-btn, .bmi-note-btn'))return; jumpToSnippet(b.bookId, b.snip, b.ratio, b.pid); closePanel('bmp'); };
         body.appendChild(d);
       });
     };
@@ -3861,6 +3896,80 @@ function renderBM(){
   });
 }
 function delBM(ts,e){ e.stopPropagation(); const idx=bookmarks.findIndex(b=>b.ts===ts); if(idx>=0) bookmarks.splice(idx,1); markDirty(); renderBM(); }
+
+/* ===== ملاحظة على كل إشارة مرجعية =====
+   كل تظليل (إشارة مرجعية لها لون) يحمل مربعاً صغيراً .bm-note-chip بجواره في النص: فارغاً (✎ باهتاً) حتى
+   تكتب له ملاحظة، ثم 📝 مُلوَّناً بعد الحفظ. الضغط عليه يفتح مربع الكتابة؛ «حفظ» يخزّن النص داخل الإشارة نفسها
+   (bm.note، و bm.nts = وقت آخر تعديل — يعتمد عليه cloud-sync.js لحسم التعارض بين الأجهزة).
+   المربع الصغير زرّ بلا أي نص حقيقي داخله (الرمز يُرسَم بـ ::before) كي لا يدخل في textContent فتنزاح
+   مواضع التظليل والبحث وأرقام الفقرات المحسوبة منه. الإشارات بلا نص محدَّد (موضع فقط) لا تظهر في النص،
+   فتُكتب ملاحظتها من زر ✎ في لوحة الإشارات. */
+let bmNoteEditing = null;
+function findBMByTs(ts, bookId){ return bookmarks.find(b => b.ts === ts && (bookId == null || b.bookId === bookId)) || null; }
+function bmNoteTitle(b){ return b && b.note ? ('ملاحظتك: ' + b.note) : 'أضف ملاحظة على هذه الإشارة'; }
+function makeBmNoteChip(ts, bookId){
+  const b = findBMByTs(ts, bookId);
+  const c = document.createElement('button');
+  c.type = 'button';
+  c.className = 'bm-note-chip' + (b && b.note ? ' has' : '');
+  c.setAttribute('data-ts', String(ts));
+  c.setAttribute('data-bid', String(bookId));
+  c.setAttribute('translate', 'no');
+  c.setAttribute('contenteditable', 'false');
+  c.title = bmNoteTitle(b);
+  return c;
+}
+function refreshBmNoteChips(){
+  document.querySelectorAll('.bm-note-chip').forEach(c => {
+    const b = findBMByTs(Number(c.getAttribute('data-ts')), c.getAttribute('data-bid'));
+    if(!b){ c.remove(); return; }
+    c.classList.toggle('has', !!b.note);
+    c.title = bmNoteTitle(b);
+  });
+}
+function openBmNote(ts, bookId){
+  const b = findBMByTs(ts, bookId); if(!b) return;
+  bmNoteEditing = { ts: b.ts, bookId: b.bookId };
+  hideSelPopup();
+  const hasText = b.snip && b.snip !== '(بداية الصفحة)';
+  document.getElementById('bmnote-ctx').textContent = hasText ? (b.snip.length > 160 ? b.snip.slice(0, 160) + '…' : b.snip) : '(إشارة بلا نص محدَّد — موضع في الكتاب)';
+  const inp = document.getElementById('bmnote-inp');
+  inp.value = b.note || '';
+  document.getElementById('bmnote-del').style.display = b.note ? '' : 'none';
+  document.getElementById('bmnote-ov').classList.add('show');
+  setTimeout(() => { try{ inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }catch(_e){} }, 50);
+}
+function closeBmNote(){
+  bmNoteEditing = null;
+  const ov = document.getElementById('bmnote-ov'); if(ov) ov.classList.remove('show');
+}
+function saveBmNote(){
+  if(!bmNoteEditing) return;
+  const b = findBMByTs(bmNoteEditing.ts, bmNoteEditing.bookId);
+  const txt = document.getElementById('bmnote-inp').value.trim();
+  if(b && txt !== (b.note || '')){
+    if(txt) b.note = txt; else delete b.note;
+    b.nts = Date.now();
+    markDirty();
+    refreshBmNoteChips();
+    renderBM();
+    toast(txt ? '✓ تم حفظ الملاحظة بجوار الإشارة' : '✓ حُذفت ملاحظة الإشارة');
+  }
+  closeBmNote();
+}
+function deleteBmNote(){ document.getElementById('bmnote-inp').value = ''; saveBmNote(); }
+document.addEventListener('click', function(e){
+  const c = e.target && e.target.closest ? e.target.closest('.bm-note-chip') : null;
+  if(!c) return;
+  e.preventDefault(); e.stopPropagation();
+  openBmNote(Number(c.getAttribute('data-ts')), c.getAttribute('data-bid'));
+}, true);
+document.addEventListener('keydown', function(e){
+  const ov = document.getElementById('bmnote-ov');
+  if(!ov || !ov.classList.contains('show')) return;
+  if(e.key === 'Escape'){ e.preventDefault(); closeBmNote(); }
+  else if(e.key === 'Enter' && (e.ctrlKey || e.metaKey)){ e.preventDefault(); saveBmNote(); }
+});
 
 /* ===== NOTES ===== */
 function openNotes(){ closeAllPanels(); document.getElementById('ntp').classList.add('show'); renderNotes(); }
@@ -4025,6 +4134,7 @@ function showEntityDetail(name){
 
 /* ===== SELECTION POPUP ===== */
 function handleSelectionUpdate(){
+  { const _ov = document.getElementById('bmnote-ov'); if(_ov && _ov.classList.contains('show')) return; } // لا نافذة تظليل أثناء الكتابة في ملاحظة إشارة
   const sel=window.getSelection(), txt=sel?sel.toString().trim():'';
   if(txt.length>10){
     selText=txt; selBookId=(cur>=0&&library[cur])?library[cur].id:null;
@@ -4433,6 +4543,7 @@ function init(){
       afterMerge: function(info){
         ReaderCloud.quiet(function(){ saveUserDataLocal(); });
         if(info.readStatus) buildSB();
+        try{ refreshBmNoteChips(); }catch(_e){}
         renderBM(); renderNotes(); renderSavedThemes();
         var hasBook = cur>=0 && library[cur];
         if(info.bookmarks && hasBook && !isChromeTranslated()){
