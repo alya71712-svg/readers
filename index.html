@@ -205,7 +205,15 @@ function el(tag,props={},kids=[]){
   return n;
 }
 const norm=s=>String(s||'').toLowerCase().replace(/[ً-ٰٟـ]/g,'').replace(/[أإآ]/g,'ا').replace(/ى/g,'ي').replace(/ة/g,'ه');
-function getLast(){try{const v=JSON.parse(store.get(K_LAST)||'null');return v&&v.id?v:null}catch{return null}}
+function getDetail(){try{const v=JSON.parse(store.get('readers_last_detail')||'null');return v&&v.file?v:null}catch{return null}}
+function getLast(){
+  let v=null;try{v=JSON.parse(store.get(K_LAST)||'null');if(!(v&&v.id))v=null}catch{v=null}
+  // لو سجّل أحد القوارئ موضعاً أحدث (آخر كتاب وفقرة) نعتمده — ويحمل اسم الكتاب ورقم الفقرة
+  const d=getDetail(),r=d&&READERS.find(x=>x.file.split('/').pop()===d.file);
+  if(r&&(!v||d.ts>=v.ts))return {id:r.id,ts:d.ts,detail:d};
+  if(v&&d&&READERS.find(x=>x.id===v.id)?.file.split('/').pop()===d.file)v.detail=d;
+  return v;
+}
 function ago(ts){
   const m=Math.round((Date.now()-ts)/60000);
   if(m<1)return 'الآن';
@@ -239,7 +247,10 @@ function renderResume(){
   const last=getLast(),r=last&&READERS.find(x=>x.id===last.id),box=$('#resume');
   if(!r){box.classList.remove('show');return}
   $('#resumeTitle').textContent=r.title;
-  $('#resumeWhen').textContent='آخر فتح: '+ago(last.ts);
+  const d=last.detail;
+  $('#resumeWhen').textContent=d&&(d.title||d.pid)
+    ?['الكتاب: '+(d.title||'—'),d.pid?'الفقرة '+d.pid:'','آخر قراءة: '+ago(d.ts||last.ts)].filter(Boolean).join(' — ')
+    :'آخر فتح: '+ago(last.ts);
   $('#resumeBtn').onclick=()=>{markOpened(r);location.href=r.file};
   box.classList.add('show');
 }

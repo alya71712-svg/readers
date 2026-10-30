@@ -1604,6 +1604,7 @@ function saveCurrentParagraphAsPosition(){
   }
   readingPosition[id] = Object.assign({}, readingPosition[id], { pid, pidTs: Date.now(), activeMode: 'pid', pidSnip });
   markDirty();
+  rememberLastRead(pid);
   toast('✓ تم حفظ الفقرة ' + pid + ' — سيفتح الكتاب عندها تلقائياً في المرة القادمة');
   closePanel('pp');
 }
@@ -3296,6 +3297,21 @@ function onScroll(){
   scheduleSavePosition(pct/100);
   updatePagePill();
 }
+/* يسجّل آخر كتاب وآخر فقرة قُرئت ليعرضها مستطيل «تابع القراءة» في الصفحة الرئيسية.
+   مفتاح مشترك بين كل القوارئ (نفس الأصل على github.io) — يحتفظ بالأحدث فقط. */
+function rememberLastRead(forcePid){
+  try{
+    if(cur<0 || !library[cur]) return;
+    const pid = forcePid || getFirstVisibleParagraphPid();
+    localStorage.setItem('readers_last_detail', JSON.stringify({
+      file: (location.pathname.split('/').pop() || ''),
+      bookId: library[cur].id,
+      title: library[cur].title || '',
+      pid: pid || null,
+      ts: Date.now()
+    }));
+  }catch(e){}
+}
 let savePosTimer = null;
 function scheduleSavePosition(ratio){
   if(cur<0 || !library[cur]) return;
@@ -3314,6 +3330,7 @@ function scheduleSavePosition(ratio){
       readingPosition[id] = Object.assign({}, prev, { ratio, page: getCurrentPageEstimate(), ts: Date.now() });
       markDirty();
     }
+    rememberLastRead();
   }, 900);
 }
 
