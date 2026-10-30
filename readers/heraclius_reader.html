@@ -2551,6 +2551,7 @@ function applyPendingNavTarget(){
         // ترجمة كروم غيّرت صياغتها) — بدل الاختفاء الصامت (كما في المسار
         // القديم أدناه)، ننتقل للفقرة كاملة ونُعلّمها تعليماً تقريبياً
         // متقطّعاً مؤقتاً، فتبقى الإشارة مفيدة حتى بلا تطابق حرفي.
+        { const _lo = findSnipLoose(el, t.snip); if(_lo){ lastFindQuery = t.snip; applyHighlights(raw, [_lo.start], _lo.end - _lo.start, 0); return; } } // مقطع يعبر فقرات
         const pidEl = getParagraphAnchor(t.pid);
         if(pidEl){
           scrollToParagraphAnchor(t.pid);
@@ -2567,7 +2568,11 @@ function applyPendingNavTarget(){
       const _pl = chunkState.plan, _off = _pl.content.indexOf(t.snip);
       if(_off >= 0){ showChunk(chunkIndexForOffset(_pl, _off), {keepScroll:true}); return applyPendingNavTarget(); }
     }
-    if(idx<0) return; // النص المترجَم لم يستقر بعد على هذه الجولة؛ ستُعاد المحاولة في التالية
+    if(idx<0){
+      const _lo2 = findSnipLoose(el, t.snip);
+      if(_lo2){ lastFindQuery = t.snip; applyHighlights(raw, [_lo2.start], _lo2.end - _lo2.start, 0); }
+      return; // وإلا: النص المترجَم لم يستقر بعد على هذه الجولة؛ ستُعاد المحاولة في التالية
+    }
     const re = new RegExp(t.snip.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'gi');
     let m, idxs=[]; while((m=re.exec(raw))!==null) idxs.push(m.index);
     const targetN = Math.max(0, idxs.indexOf(idx));
@@ -3889,7 +3894,7 @@ const HL_COLORS = ['rgba(255,238,0,.65)','rgba(140,255,120,.65)','rgba(77,225,25
 function addBM(){
   if(cur<0) return;
   const sel = window.getSelection().toString().trim();
-  const bm = {bookId:library[cur].id, title:library[cur].title, snip: sel ? sel.slice(0,1000) : '(بداية الصفحة)', ts:Date.now()};
+  const bm = {bookId:library[cur].id, title:library[cur].title, snip: sel ? sel.slice(0,BM_SNIP_MAX) : '(بداية الصفحة)', ts:Date.now()};
   if(sel){
     bm.color = HL_COLORS[0];
     bm.pid = selPid; // رقم الفقرة الثابت من لحظة التحديد — أدق من موضع النص وحده
@@ -3911,7 +3916,7 @@ function highlightSelection(color){
   if(cur<0) return;
   const sel = window.getSelection().toString().trim();
   if(!sel){ toast('حدّدي نصاً أولاً'); return; }
-  bookmarks.push({bookId:library[cur].id, title:library[cur].title, snip: sel.slice(0,1000), ts:Date.now(), color, pid: selPid});
+  bookmarks.push({bookId:library[cur].id, title:library[cur].title, snip: sel.slice(0,BM_SNIP_MAX), ts:Date.now(), color, pid: selPid});
   markDirty();
   hideSelPopup();
   toast('✓ تم تظليل النص وإضافته كإشارة مرجعية');
@@ -3937,6 +3942,21 @@ function paragraphOffsetsFor(container, wanted){
     }
   }
   return res;
+}
+/* أقصى طول نصّ يُحفظ مع كل تظليل/إشارة: نحو 4 صفحات تقديرية (الصفحة ≈ 1800 حرف). كان 1000 فيُقصّ التحديد الكبير. */
+const BM_SNIP_MAX = 8000;
+/* يجد مقطعاً محفوظاً داخل نص الكتاب المعروض مع تجاهل شارات أرقام الفقرات (.para-num) وتسامح في المسافات والأسطر.
+   سبب وجوده: textContent يحوي أرقام الشارات بين الفقرات بينما نص التحديد المحفوظ (selection.toString) لا يحويها،
+   فكان indexOf الحرفي يفشل لكل تحديد يعبر حدود فقرة، فيختفي التظليل عند النقر خارجاً. يعيد إزاحات textContent. */
+function findSnipLoose(container, snip){
+  const q = String(snip || '').replace(/…$/, '').trim();
+  if(!container || !q) return null;
+  const cl = bookTextClean(container);
+  const src = q.split(/\s+/).map(w => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('\\s*');
+  let m;
+  try{ m = new RegExp(src).exec(cl.text); }catch(_e){ return null; }
+  if(!m || !m[0].length) return null;
+  return { start: cl.toDomStart(m.index), end: cl.toDomEnd(m.index + m[0].length) };
 }
 function applyPersistentHighlights(container, book){
   if(!container || !book) return;
@@ -3971,7 +3991,9 @@ function applyPersistentHighlights(container, book){
       }
     }
     if(idx < 0) idx = full.indexOf(q);
-    if(idx>=0){ ranges.push({start:idx, end:idx+q.length, color:m.color, ts:m.ts}); container._hlDone.add(m.ts); }
+    let endIdx = idx + q.length;
+    if(idx < 0){ const lo = findSnipLoose(container, q); if(lo){ idx = lo.start; endIdx = lo.end; } } // تحديد عبر فقرات / مسافات مختلفة
+    if(idx>=0){ ranges.push({start:idx, end:endIdx, color:m.color, ts:m.ts}); container._hlDone.add(m.ts); }
   });
   if(!ranges.length) return;
   ranges.sort((a,b)=>a.start-b.start);
@@ -3982,6 +4004,7 @@ function applyPersistentHighlights(container, book){
   nodes.forEach(node=>{
     const nodeStart = pos, nodeEnd = pos + node.nodeValue.length;
     pos = nodeEnd;
+    if(node.parentElement && node.parentElement.closest('.para-num')) return; // لا نُظلّل أرقام الشارات نفسها
     const hit = ranges.filter(r => r.start < nodeEnd && r.end > nodeStart);
     if(!hit.length) return;
     const frag = document.createDocumentFragment();
