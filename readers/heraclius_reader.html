@@ -436,6 +436,11 @@ textarea.ab-inp{resize:vertical;min-height:180px;line-height:1.6;font-family:Geo
 @media (max-width:600px){ #sb{ transition:none !important; } }
 /* فهرس الكتاب: لا يُحسب تخطيط الصفوف البعيدة عن الشاشة (يسرّع أول فتح للفهرس الطويل) */
 #btoc-body .toc-item{content-visibility:auto;contain-intrinsic-size:auto 30px}
+/* فهرس الكتاب يضم آلاف الصفوف: لا انزلاق متحرك (كان يعيد حساب التخطيط كاملاً في كل إطار)
+   وعند الإغلاق يُتخطّى رسم محتواه وتخطيطه كلياً مع إبقاء العناصر جاهزة لإعادة الفتح فوراً. */
+#btocp{transition:none}
+#btocp:not(.show) #btoc-body{content-visibility:hidden}
+#btocp:not(.show){visibility:hidden}
 </style>
 <script src="../cloud-config.js?v=1"></script>
 <script src="../cloud-sync.js?v=2"></script>
