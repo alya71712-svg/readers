@@ -63,6 +63,13 @@ body{background:var(--bg);color:var(--text);font-family:Georgia,serif;font-size:
 #tb-hider.bars-hidden{height:10px;background:var(--bg2);border-bottom:1px solid var(--accent);}
 #tb-hider.bars-hidden .hider-pill{background:var(--accent);width:50px;}
 #tb-hider.bars-hidden:hover{height:22px;}
+/* زر إظهار/إخفاء لوحة التحكم: زر عائم منفصل وكبير يحلّ محل الشريط الرفيع (الذي كان يُلمَس بالخطأ مع شريط العنوان أو أزرار اللوحة) */
+#tb-hider{display:none!important}
+#tb-fab{position:fixed;left:12px;bottom:calc(84px + env(safe-area-inset-bottom,0px));width:54px;height:54px;border-radius:16px;background:var(--bg2);color:var(--gold);border:1.5px solid var(--gold);box-shadow:0 3px 14px rgba(0,0,0,.45);z-index:60;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:0;font-family:sans-serif;cursor:pointer;opacity:.82;-webkit-tap-highlight-color:transparent;touch-action:manipulation;user-select:none;-webkit-user-select:none}
+#tb-fab .fab-ic{font-size:20px;line-height:1}
+#tb-fab .fab-tx{font-size:10px;line-height:1}
+#tb-fab:active{opacity:1;transform:scale(.94)}
+#tb-fab.bars-hidden{background:var(--gold);color:var(--bg);opacity:.92}
 .tb{background:var(--bg2);border-bottom:1px solid var(--border);padding:6px 10px;display:flex;align-items:center;gap:6px;flex-shrink:0;flex-wrap:wrap}
 #tb-title{flex:1;font-size:12.5px;color:var(--gold);font-family:sans-serif;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
  .tbtn{background:none;border:1px solid var(--border);color:var(--text2);padding:4px 8px;cursor:pointer;font-size:12px;border-radius:3px;font-family:sans-serif;white-space:nowrap;transition:all .15s}
@@ -450,6 +457,8 @@ textarea.ab-inp{resize:vertical;min-height:180px;line-height:1.6;font-family:Geo
   <div id="sb-filter"><input id="fi" placeholder="ابحث في العناوين…" oninput="filterBooks(this.value)"></div>
   <div id="bl"><div class="glabel">غير مصنّف <span class="gcount">(8)</span></div><div class="bi read" id="bi0"><span class="read-dot"></span><span class="bi-title">ucalgary_2017_bertolazzi_riccardo</span><span class="pd-mark" title="نص كامل مضمّن">PD</span><span class="bi-actions"><button class="bi-btn del" title="حذف من المكتبة">🗑</button></span></div><div class="bi" id="bi1"><span class="read-dot"></span><span class="bi-title">GaiusInst1_3</span><span class="pd-mark" title="نص كامل مضمّن">PD</span><span class="bi-actions"><button class="bi-btn del" title="حذف من المكتبة">🗑</button></span></div><div class="bi" id="bi2"><span class="read-dot"></span><span class="bi-title">maternal-megalomania-julia-domna-and-the-imperial-politics-of-motherhood-9781421408477-1421408473_compress</span><span class="pd-mark" title="نص كامل مضمّن">PD</span><span class="bi-actions"><button class="bi-btn del" title="حذف من المكتبة">🗑</button></span></div><div class="bi" id="bi3"><span class="read-dot"></span><span class="bi-title">julia-domna-syrian-empress-women-of-the-ancient-world-2006033887-0203392418-0415331439-0415331447-9780415331432-9780415331449-9780203392416_compress</span><span class="pd-mark" title="نص كامل مضمّن">PD</span><span class="bi-actions"><button class="bi-btn del" title="حذف من المكتبة">🗑</button></span></div><div class="bi" id="bi4"><span class="read-dot"></span><span class="bi-title">Embodying the Empire_ Imperial Women and the Evolution of Success</span><span class="pd-mark" title="نص كامل مضمّن">PD</span><span class="bi-actions"><button class="bi-btn del" title="حذف من المكتبة">🗑</button></span></div><div class="bi read" id="bi5"><span class="read-dot"></span><span class="bi-title">The_Ghost_of_Maurice_at_the_Court_of_Her</span><span class="pd-mark" title="نص كامل مضمّن">PD</span><span class="bi-actions"><button class="bi-btn del" title="حذف من المكتبة">🗑</button></span></div><div class="bi read" id="bi6"><span class="read-dot"></span><span class="bi-title">On_Zayd_Muhammads_adopted_son_by_D_S_Pow</span><span class="pd-mark" title="نص كامل مضمّن">PD</span><span class="bi-actions"><button class="bi-btn del" title="حذف من المكتبة">🗑</button></span></div><div class="bi on read" id="bi7"><span class="read-dot"></span><span class="bi-title">Muhammad Is Not the Father of Any of Your Men_ The Making of -- David Stephan Powers -- Lightning Source Inc_ (Tier 1), Philadelphia, 2011 -- PENN, -- isbn13 9780812205572 -- d923c447b91ce7e0feeeb3f4af867e1b -- Anna’s Archive</span><span class="pd-mark" title="نص كامل مضمّن">PD</span><span class="bi-actions"><button class="bi-btn del" title="حذف من المكتبة">🗑</button></span></div></div>
 </div>
+
+<button id="tb-fab" type="button" onclick="toggleToolbars()" translate="no" aria-label="إخفاء لوحة التحكم" title="إخفاء لوحة التحكم"><span class="fab-ic">▲</span><span class="fab-tx">إخفاء</span></button>
 
 <div id="main">
   <div id="sticky-tb-wrap">
@@ -2897,12 +2906,22 @@ function collapseSBIfNarrow(animate){
   sb.classList.add('hide');
   if(!animate) setTimeout(()=>{ sb.style.transition = ''; }, 80);
 }
+function updateToolbarFab(){
+  const b = document.getElementById('tb-fab'); if(!b) return;
+  b.classList.toggle('bars-hidden', !toolbarsVisible);
+  const ic = b.querySelector('.fab-ic'), tx = b.querySelector('.fab-tx');
+  if(ic) ic.textContent = toolbarsVisible ? '▲' : '▼';
+  if(tx) tx.textContent = toolbarsVisible ? 'إخفاء' : 'الأدوات';
+  const lbl = toolbarsVisible ? 'إخفاء لوحة التحكم' : 'إظهار لوحة التحكم';
+  b.setAttribute('aria-label', lbl); b.title = lbl;
+}
 function toggleToolbars(){
   toolbarsVisible = !toolbarsVisible;
   document.getElementById('tb1').style.display = toolbarsVisible?'flex':'none';
   document.getElementById('tb2').style.display = toolbarsVisible?'flex':'none';
   document.getElementById('tb-hider').classList.toggle('bars-hidden', !toolbarsVisible);
   document.getElementById('hider-label').textContent = toolbarsVisible?'▼ إخفاء الأدوات':'▲ إظهار الأدوات';
+  updateToolbarFab();
 }
 function chFS(d){ fs=Math.max(12,Math.min(28,fs+d)); document.documentElement.style.setProperty('--fs',fs+'px'); }
 function toggleTheme(){
@@ -4639,7 +4658,7 @@ function tagUIChromeNoTranslate(){
   // نسخة سابقة من هذا الملف تركت بعض هذه العناصر (شارة التنقل بين نتائج
   // البحث، نافذة التظليل، الخ) بلا حماية فتُرجمت وتلف نصها بشكل دائم عند
   // الحفظ حينها؛ التغطية الكاملة هنا تمنع تكرار ذلك.
-  document.querySelectorAll('#sb, .tb, .rpanel, #sticky-tb-wrap, #tb-hider, #find-bar, #find-nav-pill, #sel-popup, #toast, #page-pill, #pp')
+  document.querySelectorAll('#sb, .tb, .rpanel, #sticky-tb-wrap, #tb-hider, #tb-fab, #find-bar, #find-nav-pill, #sel-popup, #toast, #page-pill, #pp')
     .forEach(el=>el.setAttribute('translate','no'));
 }
 function detectAndSetLang(content){
