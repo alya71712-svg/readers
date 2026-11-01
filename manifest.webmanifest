@@ -1,7 +1,7 @@
 {
   "name": "القوارئ العشر",
   "short_name": "القوارئ",
-  "description": "مكتبة قوارئ مشروع القرآن كُتب في الإسكندرية",
+  "description": "مشروع القراء العشر",
   "lang": "ar",
   "dir": "rtl",
   "start_url": "./index.html",
