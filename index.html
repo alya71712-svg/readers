@@ -104,6 +104,38 @@ body.panel-hidden .panel-toggle{position:fixed;right:0;top:50%;transform:transla
   .today{font-size:15px}
   .grid{grid-template-columns:1fr}
 }
+/* ---------- محادثة Claude ---------- */
+.modal.chat-modal{width:min(820px,100%);height:88vh;max-height:860px;display:flex;flex-direction:column;overflow:hidden;padding:16px}
+.chat-modal .modal-head{margin-bottom:8px}
+.chat-modal .modal-head h2{font-size:19px}
+.chat-wrap{display:flex;flex-direction:column;gap:10px;flex:1;min-height:0}
+.chat-bar{display:flex;gap:8px;flex-wrap:wrap}
+.chat-bar button{padding:7px 12px;font-size:13px}
+.chat-list{flex:1;min-height:0;overflow:auto;display:flex;flex-direction:column;gap:10px;padding:4px 2px}
+.chat-empty{margin:auto;max-width:420px;text-align:center;color:var(--muted);line-height:1.9;font-size:14px}
+.bubble{padding:11px 14px;border-radius:14px;line-height:1.9;font-size:calc(var(--font-size) + 1px);overflow-wrap:anywhere}
+.bubble.user{align-self:flex-start;max-width:88%;background:var(--accent);color:#fff;white-space:pre-wrap}
+.bubble.assistant{align-self:stretch;background:var(--soft);border:1px solid var(--line)}
+.bubble.error{align-self:stretch;background:#fee2e2;color:#991b1b;border:1px solid #fecaca;white-space:pre-wrap;font-size:14px}
+.bubble.typing{color:var(--muted)}
+.bubble p{margin:0 0 .6em}
+.bubble ul,.bubble ol{margin:0 0 .6em;padding:0 22px 0 0}
+.bubble>*:last-child{margin-bottom:0}
+.bubble pre{direction:ltr;text-align:left;overflow:auto;background:rgba(0,0,0,.08);padding:10px;border-radius:10px;margin:.4em 0;font-size:13px}
+.bubble code{direction:ltr;unicode-bidi:isolate;font-size:.9em;background:rgba(0,0,0,.07);padding:1px 5px;border-radius:5px}
+.bubble pre code{background:none;padding:0}
+.md-h{font-weight:800;margin:.5em 0 .3em;color:var(--accent)}
+.chat-compose{display:flex;gap:8px;align-items:flex-end}
+.chat-input,.chat-field{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--cell);color:var(--ink);font:inherit;font-size:15px;outline:0}
+.chat-input{flex:1;min-width:0;width:auto;resize:none;max-height:140px;line-height:1.6}
+.chat-input:focus,.chat-field:focus{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 20%,transparent)}
+.chat-send{padding:11px 18px;white-space:nowrap}
+.chat-send.stop{background:#b91c1c}
+.chat-note{font-size:11px;color:var(--muted);text-align:center}
+.chat-form label{display:block;margin:12px 0 5px;font-weight:700;font-size:14px}
+.chat-form p{margin:6px 0;font-size:13px;line-height:1.8;color:var(--muted)}
+.chat-form .row{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+@media(max-width:760px){.modal.chat-modal{width:100%;height:94vh;height:94dvh;padding:12px;border-radius:16px}}
 </style>
 </head>
 <body>
@@ -130,6 +162,7 @@ body.panel-hidden .panel-toggle{position:fixed;right:0;top:50%;transform:transla
           <button class="nav-btn" type="button" onclick="openAdd()"><span class="nav-icon">✎</span>كيف أضيف أو أغيّر قارئاً</button>
           <button class="nav-btn" type="button" onclick="recheck()"><span class="nav-icon">⟳</span>إعادة فحص الملفات</button>
           <button class="nav-btn" type="button" onclick="openCloud()"><span class="nav-icon">☁</span>المزامنة السحابية</button>
+          <button class="nav-btn" type="button" onclick="openChat()"><span class="nav-icon">💬</span>محادثة مع Claude</button>
         </div>
         <div class="panel-note">كل قارئ يحفظ علاماته وملاحظاته وتظليله ومكان توقفك على هذا المتصفح، وتُنسخ سحابياً عند تفعيل «المزامنة السحابية» لتظهر على أي جهاز.</div>
       </aside>
@@ -302,6 +335,7 @@ function togglePanel(){const h=document.body.classList.toggle('panel-hidden');st
 
 // ---------- النوافذ ----------
 function openModal(title,body,footer){
+  modal.className='modal';
   modal.replaceChildren(
     el('div',{class:'modal-head'},[el('h2',{text:title}),el('button',{class:'close',type:'button',onclick:closeModal,'aria-label':'إغلاق',text:'×'})]),
     body,
@@ -309,7 +343,7 @@ function openModal(title,body,footer){
   );
   modalBackdrop.classList.add('open');
 }
-function closeModal(){modalBackdrop.classList.remove('open')}
+function closeModal(){if(typeof chatAbort!=='undefined'&&chatAbort)chatAbort.abort();modalBackdrop.classList.remove('open')}
 function backdropClose(e){if(e.target===modalBackdrop)closeModal()}
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal()});
 
@@ -380,6 +414,202 @@ function openCloud(){
   }
   openModal('المزامنة السحابية',body);
 }
+// ---------- محادثة مع Claude (مباشرة من المتصفح بمفتاح API خاص بك) ----------
+// المفتاح يُحفظ في localStorage على هذا الجهاز فقط — لا يُكتب في الكود ولا يدخل المزامنة السحابية.
+const CHAT_MODELS=[
+ {id:'claude-sonnet-5-5',name:'Sonnet 5.5 — متوازن (موصى به)'},
+ {id:'claude-opus-5-5',name:'Opus 5.5 — أعمق وأعلى تكلفة'},
+ {id:'claude-haiku-5-5',name:'Haiku 5.5 — أسرع وأرخص'},
+ {id:'claude-fable-5-1',name:'Fable 5.1 — الأقوى'}
+];
+const K_CKEY='readers_claude_key',K_CMODEL='readers_claude_model',K_CSYS='readers_claude_system',K_CHIST='readers_claude_history';
+const CHAT_SYS_DEFAULT='أنت Claude، مساعد بحثي داخل موقع «القوارئ العشر» لنصوص الإسكندرية القديمة (أوريجانوس وفيلون ويوسيفوس وهرقل ومصادرهم). أجب بالعربية، وأبقِ المصطلحات الفنية بين قوسين، وميّز بوضوح بين ما تقوله المصادر وما هو استنتاج، ولا تخترع اقتباسات أو أرقام فقرات.';
+const CHAT_MAX_SEND=30,CHAT_MAX_KEEP=60;
+let chatHist=[],chatAbort=null,chatEpoch=0;
+
+function loadChat(){
+  try{const v=JSON.parse(store.get(K_CHIST)||'[]');chatHist=Array.isArray(v)?v.filter(m=>m&&(m.role==='user'||m.role==='assistant')&&typeof m.content==='string'):[]}
+  catch{chatHist=[]}
+}
+function saveChat(){chatHist=chatHist.slice(-CHAT_MAX_KEEP);store.set(K_CHIST,JSON.stringify(chatHist))}
+
+// عرض Markdown مبسّط وآمن (بناء عناصر DOM بـ textContent فقط، بلا innerHTML)
+function mdInline(text,parent){
+  const re=/(\*\*[^*]+\*\*|`[^`]+`|\*[^*\n]+\*)/g;let last=0,m;
+  while((m=re.exec(text))){
+    if(m.index>last)parent.appendChild(document.createTextNode(text.slice(last,m.index)));
+    const t=m[0];
+    if(t.startsWith('**'))parent.appendChild(el('b',{text:t.slice(2,-2)}));
+    else if(t[0]==='`')parent.appendChild(el('code',{text:t.slice(1,-1)}));
+    else parent.appendChild(el('i',{text:t.slice(1,-1)}));
+    last=m.index+t.length;
+  }
+  if(last<text.length)parent.appendChild(document.createTextNode(text.slice(last)));
+}
+function mdRender(src,box){
+  box.replaceChildren();
+  const lines=String(src).split('\n');let i=0,list=null,listType='';
+  while(i<lines.length){
+    const ln=lines[i];let m;
+    if(/^```/.test(ln)){
+      list=null;const buf=[];i++;
+      while(i<lines.length&&!/^```/.test(lines[i])){buf.push(lines[i]);i++}
+      i++;box.appendChild(el('pre',{},[el('code',{text:buf.join('\n')})]));continue;
+    }
+    if((m=ln.match(/^#{1,4}\s+(.*)/))){list=null;const h=el('div',{class:'md-h'});mdInline(m[1],h);box.appendChild(h)}
+    else if((m=ln.match(/^\s*[-*•]\s+(.*)/))){
+      if(!list||listType!=='ul'){list=el('ul');listType='ul';box.appendChild(list)}
+      const li=el('li');mdInline(m[1],li);list.appendChild(li);
+    }else if((m=ln.match(/^\s*\d+[.)]\s+(.*)/))){
+      if(!list||listType!=='ol'){list=el('ol');listType='ol';box.appendChild(list)}
+      const li=el('li');mdInline(m[1],li);list.appendChild(li);
+    }else if(!ln.trim()){list=null}
+    else{list=null;const p=el('p');mdInline(ln,p);box.appendChild(p)}
+    i++;
+  }
+}
+
+// بثّ الرد من واجهة Anthropic (SSE) — يستدعي onDelta لكل جزء نصّي
+async function claudeStream(messages,onDelta,signal){
+  const key=store.get(K_CKEY),model=store.get(K_CMODEL)||CHAT_MODELS[0].id;
+  const res=await fetch('https://api.anthropic.com/v1/messages',{
+    method:'POST',signal,
+    headers:{'content-type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+    body:JSON.stringify({model,max_tokens:4096,system:store.get(K_CSYS)||CHAT_SYS_DEFAULT,messages,stream:true})
+  });
+  if(!res.ok){
+    let m='';try{const j=await res.json();m=(j.error&&j.error.message)||''}catch{}
+    const base=res.status===401?'المفتاح غير صالح أو ملغى — افتح ⚙ الإعدادات وتحقق منه.'
+      :res.status===429?'تجاوزت حد الطلبات — أعد المحاولة بعد قليل.'
+      :res.status>=500?'خدمة Anthropic مشغولة حالياً — أعد المحاولة.'
+      :'رفض الخادم الطلب ('+res.status+').';
+    throw new Error(base+(m?'\n'+m:''));
+  }
+  const rd=res.body.getReader(),dec=new TextDecoder();let buf='';
+  for(;;){
+    const {done,value}=await rd.read();if(done)break;
+    buf+=dec.decode(value,{stream:true}).replace(/\r\n/g,'\n');
+    let i;
+    while((i=buf.indexOf('\n\n'))>=0){
+      const block=buf.slice(0,i);buf=buf.slice(i+2);
+      const line=block.split('\n').find(l=>l.startsWith('data:'));if(!line)continue;
+      let ev;try{ev=JSON.parse(line.slice(5).trim())}catch{continue}
+      if(ev.type==='content_block_delta'&&ev.delta&&ev.delta.type==='text_delta')onDelta(ev.delta.text);
+      else if(ev.type==='error')throw new Error((ev.error&&ev.error.message)||'خطأ من الخادم أثناء البث.');
+    }
+  }
+}
+
+function openChat(){
+  loadChat();
+  if(!store.get(K_CKEY)){openChatSettings(true);return}
+  const list=el('div',{class:'chat-list'});
+  const ta=el('textarea',{class:'chat-input',rows:'1',placeholder:'اكتب سؤالك لـ Claude…','aria-label':'رسالة'});
+  const sendBtn=el('button',{type:'button',class:'chat-send',text:'إرسال'});
+  const scroll=()=>{list.scrollTop=list.scrollHeight};
+  const autosize=()=>{ta.style.height='auto';ta.style.height=Math.min(ta.scrollHeight,140)+'px'};
+  const setBusy=b=>{sendBtn.textContent=b?'إيقاف':'إرسال';sendBtn.classList.toggle('stop',b)};
+  const addBubble=(role,text)=>{
+    const e=list.querySelector('.chat-empty');if(e)e.remove();
+    const b=el('div',{class:'bubble '+role});
+    if(role==='assistant')mdRender(text,b);else b.textContent=text;
+    list.appendChild(b);return b;
+  };
+  const buildMessages=()=>{
+    const msgs=chatHist.slice(-CHAT_MAX_SEND);
+    while(msgs.length&&msgs[0].role!=='user')msgs.shift();
+    return msgs;
+  };
+
+  async function send(){
+    const text=ta.value.trim();if(!text||chatAbort)return;
+    const epoch=chatEpoch;
+    ta.value='';autosize();
+    chatHist.push({role:'user',content:text});addBubble('user',text);
+    const out=addBubble('assistant','');out.classList.add('typing');out.textContent='…';scroll();
+    const ac=new AbortController();chatAbort=ac;setBusy(true);
+    let acc='',raf=0;
+    const paint=()=>{raf=0;mdRender(acc,out);scroll()};
+    try{
+      await claudeStream(buildMessages(),d=>{acc+=d;out.classList.remove('typing');if(!raf)raf=requestAnimationFrame(paint)},ac.signal);
+      if(raf)cancelAnimationFrame(raf);
+      if(!acc.trim())throw new Error('وصل رد فارغ — أعد المحاولة.');
+      mdRender(acc,out);scroll();
+      if(epoch===chatEpoch){chatHist.push({role:'assistant',content:acc});saveChat()}
+    }catch(e){
+      if(raf)cancelAnimationFrame(raf);
+      if(epoch!==chatEpoch)return;
+      if(e&&e.name==='AbortError'&&acc.trim()){
+        mdRender(acc,out);chatHist.push({role:'assistant',content:acc});saveChat();
+      }else{
+        chatHist.pop();            // نُسقط رسالتك من السجل ونعيدها للمربع لتعيد الإرسال
+        out.remove();ta.value=text;autosize();
+        const msg=e&&e.name==='AbortError'?'تم إيقاف الإرسال.':(e instanceof TypeError?'تعذّر الاتصال بـ Anthropic — تحقق من الإنترنت.':(e&&e.message)||'حدث خطأ غير متوقع.');
+        addBubble('error',msg);scroll();
+      }
+    }finally{
+      if(chatAbort===ac)chatAbort=null;
+      setBusy(false);
+    }
+  }
+
+  sendBtn.onclick=()=>{if(chatAbort)chatAbort.abort();else send()};
+  ta.addEventListener('input',autosize);
+  ta.addEventListener('keydown',e=>{
+    const coarse=window.matchMedia&&matchMedia('(pointer:coarse)').matches;
+    if(e.key==='Enter'&&!e.shiftKey&&!coarse){e.preventDefault();send()}
+  });
+
+  const bar=el('div',{class:'chat-bar'},[
+    el('button',{type:'button',class:'ghost',text:'⚙ الإعدادات',onclick:()=>{if(!chatAbort)openChatSettings(false)}}),
+    el('button',{type:'button',class:'ghost',text:'🗑 محادثة جديدة',onclick:()=>{
+      if(chatHist.length&&!confirm('سيُمسح سجل هذه المحادثة من هذا الجهاز. متابعة؟'))return;
+      chatEpoch++;if(chatAbort)chatAbort.abort();chatHist=[];saveChat();openChat();
+    }})
+  ]);
+  openModal('محادثة مع Claude',el('div',{class:'chat-wrap'},[
+    bar,list,
+    el('div',{class:'chat-compose'},[ta,sendBtn]),
+    el('div',{class:'chat-note',text:'السجل محفوظ على هذا الجهاز فقط. Claude قد يخطئ — راجع أي اقتباس على المصدر.'})
+  ]),el('div'));
+  modal.classList.add('chat-modal');
+  if(chatHist.length)chatHist.forEach(m=>addBubble(m.role,m.content));
+  else list.appendChild(el('div',{class:'chat-empty',text:'اسأل Claude عن أي نص أو فكرة في مكتبتك. الإجابات تُبثّ مباشرة هنا دون الحاجة لفتح تطبيق Claude.'}));
+  scroll();
+}
+
+function openChatSettings(first){
+  const cur=store.get(K_CMODEL)||CHAT_MODELS[0].id;
+  const key=el('input',{type:'password',class:'chat-field',dir:'ltr',autocomplete:'off',spellcheck:'false',placeholder:'sk-ant-…',value:store.get(K_CKEY)||''});
+  const sel=el('select',{class:'chat-field'},CHAT_MODELS.map(m=>{const o=el('option',{value:m.id,text:m.name});if(m.id===cur)o.selected=true;return o}));
+  const sys=el('textarea',{class:'chat-field',rows:'5'});sys.value=store.get(K_CSYS)||CHAT_SYS_DEFAULT;
+  const msg=el('div',{class:'status',role:'status'});
+  const body=el('div',{class:'chat-form'},[
+    el('p',{text:first?'للربط المباشر مع Claude أدخل مفتاح API مرة واحدة على هذا الجهاز.':'إعدادات المحادثة'}),
+    el('p',{text:'أنشئ المفتاح من console.anthropic.com ← API Keys. الفوترة منفصلة عن اشتراك تطبيق Claude، فاضبط حداً شهرياً للإنفاق هناك.'}),
+    el('p',{text:'يُحفظ المفتاح على هذا الجهاز فقط؛ لا يُرفع إلى GitHub ولا إلى المزامنة السحابية، فأدخله مرة في كل جهاز تستخدمه.'}),
+    el('label',{text:'مفتاح API'}),key,
+    el('label',{text:'النموذج'}),sel,
+    el('label',{text:'تعليمات النظام (اختياري)'}),sys,
+    el('div',{class:'row'},[
+      el('button',{type:'button',text:'حفظ',onclick:()=>{
+        const k=key.value.trim();
+        if(!/^[\x21-\x7E]{20,}$/.test(k)){msg.textContent='المفتاح غير صالح — ألصقه كما هو من الكونسول (أحرف إنجليزية بلا مسافات).';return}
+        store.set(K_CKEY,k);store.set(K_CMODEL,sel.value);
+        const s=sys.value.trim();store.set(K_CSYS,s&&s!==CHAT_SYS_DEFAULT?s:'');
+        openChat();
+      }}),
+      el('button',{type:'button',class:'secondary',text:'استعادة التعليمات الافتراضية',onclick:()=>{sys.value=CHAT_SYS_DEFAULT}}),
+      el('button',{type:'button',class:'secondary',text:'حذف المفتاح من هذا الجهاز',onclick:()=>{
+        if(confirm('سيُحذف المفتاح من هذا الجهاز. متابعة؟')){try{localStorage.removeItem(K_CKEY)}catch{}key.value='';msg.textContent='✓ حُذف المفتاح.'}
+      }}),
+      !first&&el('button',{type:'button',class:'ghost',text:'رجوع للمحادثة',onclick:()=>{if(store.get(K_CKEY))openChat();else closeModal()}})
+    ]),
+    msg
+  ]);
+  openModal('محادثة مع Claude',body);
+}
+
 function openAdd(){
   const li=t=>el('li',{},[t]);
   const code=t=>el('code',{text:t});
