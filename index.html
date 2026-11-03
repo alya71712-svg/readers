@@ -132,6 +132,8 @@ body.panel-hidden .panel-toggle{position:fixed;right:0;top:50%;transform:transla
 .chat-send{padding:11px 18px;white-space:nowrap}
 .chat-send.stop{background:#b91c1c}
 .chat-note{font-size:11px;color:var(--muted);text-align:center}
+.chat-status{font-size:13px;color:var(--accent);text-align:start;padding:0 4px}
+.chat-status:empty{display:none}
 .chat-form label{display:block;margin:12px 0 5px;font-weight:700;font-size:14px}
 .chat-form p{margin:6px 0;font-size:13px;line-height:1.8;color:var(--muted)}
 .chat-form .row{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
@@ -175,6 +177,7 @@ body.panel-hidden .panel-toggle{position:fixed;right:0;top:50%;transform:transla
 
 <script src="cloud-config.js?v=1"></script>
 <script src="cloud-sync.js?v=2"></script>
+<script src="reader-bridge.js?v=1"></script>
 <script>
 // ============================================================
 // قائمة القوارئ العشر — عدّل هذه القائمة فقط لتغيير ما يظهر في الموقع.
@@ -469,13 +472,25 @@ function mdRender(src,box){
   }
 }
 
-// بثّ الرد من واجهة Anthropic (SSE) — يستدعي onDelta لكل جزء نصّي
-async function claudeStream(messages,onDelta,signal){
+const TOOL_GUIDE='\n\nلديك أدوات تصل بها إلى مكتبة المستخدم في «القوارئ العشر»: list_library وget_user_data وsearch_texts وread_passage. استخدمها بدل التخمين: ابحث في النصوص قبل أن تنسب قولاً لمصدر، واقتبس من نتائج الأدوات فقط مع ذكر القارئ والكتاب ورقم الفقرة (pid) كما يظهر في القارئ. إن لم تجد شيئاً فقل ذلك صراحةً ولا تخترع نصاً أو رقم فقرة. نصوص المكتبة إنجليزية ويونانية ولاتينية وفرنسية في معظمها وفيها عربي قليل جداً، فترجم كلمات البحث التي يكتبها المستخدم بالعربية إلى لغة النص (الإنجليزية غالباً، واليونانية بحروفها) ثم اشرح له بالعربية. النصوص مستخرجة بمسح ضوئي وقد تحوي أخطاء، فجرّب تهجئات ولغات أخرى قبل أن تستنتج الغياب. عند السؤال عن تظليل المستخدم أو ملاحظاته أو إشاراته أو موضع توقفه فاقرأها بـ get_user_data. ابدأ بنطاق ضيّق (reader/book) كلما أمكن لأن البحث في كل القوارئ ثقيل على الجهاز.';
+const TOOL_LABELS={
+  list_library:()=>'📚 يطّلع على المكتبة…',
+  get_user_data:i=>'🖍 يقرأ '+({highlights:'تظليلك',bookmarks:'إشاراتك',notes:'ملاحظاتك',positions:'مواضع توقفك',summary:'ملخص بياناتك'}[i&&i.kind]||'بياناتك')+'…',
+  search_texts:i=>'🔎 يبحث في النصوص: '+String((i&&i.query)||'').slice(0,40),
+  read_passage:i=>'📖 يقرأ الفقرات'+(i&&i.book?' من «'+String(i.book).slice(0,30)+'»':'')+'…'
+};
+const CHAT_MAX_STEPS=8;
+let chatStatusHook=null,chatToolLabel='';
+
+// طلب واحد إلى Anthropic مع بثّ SSE. يعيد {content,stop_reason}؛ كل جزء نصّي يُمرَّر إلى onDelta فور وصوله.
+async function claudeCall(messages,onDelta,signal,tools){
   const key=store.get(K_CKEY),model=store.get(K_CMODEL)||CHAT_MODELS[0].id;
+  const body={model,max_tokens:4096,system:(store.get(K_CSYS)||CHAT_SYS_DEFAULT)+(tools?TOOL_GUIDE:''),messages,stream:true};
+  if(tools)body.tools=tools;
   const res=await fetch('https://api.anthropic.com/v1/messages',{
     method:'POST',signal,
     headers:{'content-type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
-    body:JSON.stringify({model,max_tokens:4096,system:store.get(K_CSYS)||CHAT_SYS_DEFAULT,messages,stream:true})
+    body:JSON.stringify(body)
   });
   if(!res.ok){
     let m='';try{const j=await res.json();m=(j.error&&j.error.message)||''}catch{}
@@ -485,6 +500,7 @@ async function claudeStream(messages,onDelta,signal){
       :'رفض الخادم الطلب ('+res.status+').';
     throw new Error(base+(m?'\n'+m:''));
   }
+  const blocks=[];let stop=null;
   const rd=res.body.getReader(),dec=new TextDecoder();let buf='';
   for(;;){
     const {done,value}=await rd.read();if(done)break;
@@ -494,10 +510,50 @@ async function claudeStream(messages,onDelta,signal){
       const block=buf.slice(0,i);buf=buf.slice(i+2);
       const line=block.split('\n').find(l=>l.startsWith('data:'));if(!line)continue;
       let ev;try{ev=JSON.parse(line.slice(5).trim())}catch{continue}
-      if(ev.type==='content_block_delta'&&ev.delta&&ev.delta.type==='text_delta')onDelta(ev.delta.text);
+      if(ev.type==='content_block_start'&&ev.content_block){
+        const cb=ev.content_block;
+        blocks[ev.index]=cb.type==='tool_use'?{type:'tool_use',id:cb.id,name:cb.name,json:''}:{type:'text',text:''};
+      }else if(ev.type==='content_block_delta'&&ev.delta){
+        let b=blocks[ev.index];
+        if(!b&&ev.delta.type==='text_delta')b=blocks[ev.index]={type:'text',text:''};
+        if(!b)continue;
+        if(ev.delta.type==='text_delta'){b.text+=ev.delta.text;onDelta(ev.delta.text)}
+        else if(ev.delta.type==='input_json_delta')b.json+=ev.delta.partial_json||'';
+      }else if(ev.type==='message_delta'&&ev.delta&&ev.delta.stop_reason)stop=ev.delta.stop_reason;
       else if(ev.type==='error')throw new Error((ev.error&&ev.error.message)||'خطأ من الخادم أثناء البث.');
     }
   }
+  const content=blocks.filter(Boolean).map(b=>{
+    if(b.type==='tool_use'){let input={};try{input=JSON.parse(b.json||'{}')}catch{}return {type:'tool_use',id:b.id,name:b.name,input}}
+    return b;
+  }).filter(b=>b.type==='tool_use'||(b.text&&b.text.trim()));
+  return {content,stop_reason:stop};
+}
+
+// دورة كاملة: يستدعي Claude، وإن طلب أدوات ننفّذها محلياً (في هذا المتصفح) ونعيد النتائج إليه حتى يجيب.
+async function claudeTurn(messages,hooks,signal){
+  const tools=(window.ReaderBridge&&ReaderBridge.tools().length)?ReaderBridge.tools():null;
+  const turn=messages.slice();
+  chatStatusHook=hooks.status;
+  try{
+    for(let step=0;step<CHAT_MAX_STEPS;step++){
+      if(step>0)hooks.sep();
+      const r=await claudeCall(turn,hooks.delta,signal,tools);
+      const uses=r.content.filter(b=>b.type==='tool_use');
+      if(r.stop_reason==='max_tokens')hooks.delta('\n\n(انقطع الرد لبلوغ الحد الأقصى للطول — اطلب «أكمل».)');
+      if(r.stop_reason!=='tool_use'||!uses.length)return;
+      turn.push({role:'assistant',content:r.content});
+      const results=[];
+      for(const u of uses){
+        if(signal&&signal.aborted)throw new DOMException('aborted','AbortError');
+        const lab=TOOL_LABELS[u.name];chatToolLabel=lab?lab(u.input):'⚙ '+u.name;hooks.status(chatToolLabel);
+        results.push({type:'tool_result',tool_use_id:u.id,content:await ReaderBridge.execTool(u.name,u.input)});
+      }
+      chatToolLabel='';hooks.status('');
+      turn.push({role:'user',content:results});
+    }
+    hooks.delta('\n\n(توقفت بعد '+CHAT_MAX_STEPS+' خطوات بحث — اطرح سؤالاً أضيق أو اطلب «أكمل».)');
+  }finally{chatStatusHook=null;chatToolLabel='';hooks.status('')}
 }
 
 function openChat(){
@@ -526,12 +582,17 @@ function openChat(){
     const epoch=chatEpoch;
     ta.value='';autosize();
     chatHist.push({role:'user',content:text});addBubble('user',text);
-    const out=addBubble('assistant','');out.classList.add('typing');out.textContent='…';scroll();
+    const out=addBubble('assistant','');out.classList.add('typing');out.textContent='…';
+    const st=el('div',{class:'chat-note chat-status',role:'status'});list.insertBefore(st,out);scroll();
     const ac=new AbortController();chatAbort=ac;setBusy(true);
     let acc='',raf=0;
     const paint=()=>{raf=0;mdRender(acc,out);scroll()};
     try{
-      await claudeStream(buildMessages(),d=>{acc+=d;out.classList.remove('typing');if(!raf)raf=requestAnimationFrame(paint)},ac.signal);
+      await claudeTurn(buildMessages(),{
+        delta:d=>{acc+=d;out.classList.remove('typing');if(!raf)raf=requestAnimationFrame(paint)},
+        sep:()=>{if(acc&&!/\n$/.test(acc))acc+='\n\n'},
+        status:t=>{st.textContent=t;scroll()}
+      },ac.signal);
       if(raf)cancelAnimationFrame(raf);
       if(!acc.trim())throw new Error('وصل رد فارغ — أعد المحاولة.');
       mdRender(acc,out);scroll();
@@ -549,7 +610,7 @@ function openChat(){
       }
     }finally{
       if(chatAbort===ac)chatAbort=null;
-      setBusy(false);
+      st.remove();setBusy(false);
     }
   }
 
@@ -574,7 +635,7 @@ function openChat(){
   ]),el('div'));
   modal.classList.add('chat-modal');
   if(chatHist.length)chatHist.forEach(m=>addBubble(m.role,m.content));
-  else list.appendChild(el('div',{class:'chat-empty',text:'اسأل Claude عن أي نص أو فكرة في مكتبتك. الإجابات تُبثّ مباشرة هنا دون الحاجة لفتح تطبيق Claude.'}));
+  else list.appendChild(el('div',{class:'chat-empty',text:'اسأل Claude عن أي نص في القوارئ العشر: يبحث في النصوص ويقرأ الفقرات بأرقامها، ويطّلع على تظليلك وملاحظاتك وإشاراتك وموضع توقفك في كل قارئ.'}));
   scroll();
 }
 
@@ -626,6 +687,8 @@ function openAdd(){
 }
 
 // ---------- البدء ----------
+const READER_KEYS={origen:'myreader_userdata_origen_v1',philo:'myreader_userdata_philo_v1',josephus:'myreader_userdata_josephus_v1',heraclius:'myreader_userdata_heraclius_main_v1','heraclius-other':'myreader_userdata_another_heraclius_v1','filo-leop':'myreader_userdata_filo_leop_v1','heraclius-legend':'myreader_userdata_heraclius_legend_v1',motherhood:'myreader_userdata_motherhood_v1','woman-filo':'myreader_userdata_woman_filo_v1',template:'myreader_userdata_template_base_v1'};
+if(window.ReaderBridge)ReaderBridge.configure({readers:READERS.map(r=>({id:r.id,title:r.title,sub:r.sub,desc:r.desc,texts:r.texts,file:r.file,key:READER_KEYS[r.id]})),budgetChars:30e6,onStatus:t=>{if(chatStatusHook)chatStatusHook(t?(chatToolLabel?chatToolLabel+' — '+t:t):chatToolLabel)}});
 (function init(){
   $('#today').textContent=new Date().toLocaleDateString('ar-EG',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
   applyTheme(store.get(K_THEME)||'earth');
