@@ -164,7 +164,7 @@ body.panel-hidden .panel-toggle{position:fixed;right:0;top:50%;transform:transla
           <button class="nav-btn" type="button" onclick="openAdd()"><span class="nav-icon">✎</span>كيف أضيف أو أغيّر قارئاً</button>
           <button class="nav-btn" type="button" onclick="recheck()"><span class="nav-icon">⟳</span>إعادة فحص الملفات</button>
           <button class="nav-btn" type="button" onclick="openCloud()"><span class="nav-icon">☁</span>المزامنة السحابية</button>
-          <button class="nav-btn" type="button" onclick="openChat()"><span class="nav-icon">💬</span>محادثة مع Claude</button>
+          <button class="nav-btn" type="button" onclick="openChat()"><span class="nav-icon">💬</span>محادثة مع Claude أو Grok</button>
         </div>
         <div class="panel-note">كل قارئ يحفظ علاماته وملاحظاته وتظليله ومكان توقفك على هذا المتصفح، وتُنسخ سحابياً عند تفعيل «المزامنة السحابية» لتظهر على أي جهاز.</div>
       </aside>
@@ -425,8 +425,9 @@ const CHAT_MODELS=[
  {id:'claude-haiku-5-5',name:'Haiku 5.5 — أسرع وأرخص'},
  {id:'claude-fable-5-1',name:'Fable 5.1 — الأقوى'}
 ];
+const K_CPROV='readers_chat_provider',K_GURL='readers_grok_url',K_GPASS='readers_grok_pass',K_GMODEL='readers_grok_model';
 const K_CKEY='readers_claude_key',K_CMODEL='readers_claude_model',K_CSYS='readers_claude_system',K_CHIST='readers_claude_history';
-const CHAT_SYS_DEFAULT='أنت Claude، مساعد بحثي داخل موقع «القوارئ العشر» لنصوص الإسكندرية القديمة (أوريجانوس وفيلون ويوسيفوس وهرقل ومصادرهم). أجب بالعربية، وأبقِ المصطلحات الفنية بين قوسين، وميّز بوضوح بين ما تقوله المصادر وما هو استنتاج، ولا تخترع اقتباسات أو أرقام فقرات.';
+const CHAT_SYS_DEFAULT='أنت مساعد بحثي داخل موقع «القوارئ العشر» لنصوص الإسكندرية القديمة (أوريجانوس وفيلون ويوسيفوس وهرقل ومصادرهم). أجب بالعربية، وأبقِ المصطلحات الفنية بين قوسين، وميّز بوضوح بين ما تقوله المصادر وما هو استنتاج، ولا تخترع اقتباسات أو أرقام فقرات.';
 const CHAT_MAX_SEND=30,CHAT_MAX_KEEP=60;
 let chatHist=[],chatAbort=null,chatEpoch=0;
 
@@ -556,11 +557,88 @@ async function claudeTurn(messages,hooks,signal){
   }finally{chatStatusHook=null;chatToolLabel='';hooks.status('')}
 }
 
+
+// ---------- Grok (xAI) عبر دالة Supabase تحفظ المفتاح سراً ----------
+function chatReady(){return store.get(K_CPROV)==='grok'?!!(store.get(K_GURL)&&store.get(K_GPASS)):!!store.get(K_CKEY)}
+function providerName(){return store.get(K_CPROV)==='grok'?'Grok':'Claude'}
+function grokDefaultUrl(){const u=String((window.READER_CLOUD_CONFIG||{}).url||'').replace(/\/+$/,'');return u?u+'/functions/v1/research-assistant':''}
+
+// طلب واحد بصيغة OpenAI-compatible. يعيد {text,calls:[{id,name,args}],finish}
+async function grokCall(messages,onDelta,signal,tools){
+  const url=(store.get(K_GURL)||'').trim(),model=(store.get(K_GMODEL)||'').trim();
+  const body={messages,max_tokens:4096};
+  if(model)body.model=model;
+  if(tools)body.tools=tools.map(t=>({type:'function',function:{name:t.name,description:t.description,parameters:t.input_schema}}));
+  const headers={'content-type':'application/json','x-assistant-pass':store.get(K_GPASS)||''};
+  const ck=(window.READER_CLOUD_CONFIG||{}).key;if(ck)headers.apikey=ck;
+  const res=await fetch(url,{method:'POST',signal,headers,body:JSON.stringify(body)});
+  if(!res.ok){
+    let m='';try{const j=await res.json();m=typeof j.error==='string'?j.error:((j.error&&j.error.message)||j.message||'')}catch{}
+    const base=res.status===401?'رُفض الاعتماد (401): كلمة مرور المساعد أو مفتاح xAI غير صحيح — راجع ⚙ الإعدادات وأسرار الدالة.'
+      :res.status===404?'الدالة غير موجودة على هذا العنوان — تحقق من نشرها باسم research-assistant ومن العنوان في الإعدادات.'
+      :res.status===429?'تجاوزت حد الطلبات — أعد المحاولة بعد قليل.'
+      :res.status>=500?'تعذّر إتمام الطلب من جهة الدالة أو xAI ('+res.status+').'
+      :'رفض الخادم الطلب ('+res.status+').';
+    throw new Error(base+(m?'\n'+m:''));
+  }
+  let text='',finish=null;const calls=[];
+  const feed=block=>{
+    for(const line of block.split('\n')){
+      if(!line.startsWith('data:'))continue;
+      const d=line.slice(5).trim();if(!d||d==='[DONE]')continue;
+      let ev;try{ev=JSON.parse(d)}catch{continue}
+      if(ev.error)throw new Error(typeof ev.error==='string'?ev.error:(ev.error.message||'خطأ من الخادم أثناء البث.'));
+      const ch=ev.choices&&ev.choices[0];if(!ch)continue;
+      const dl=ch.delta||{};
+      if(dl.content){text+=dl.content;onDelta(dl.content)}
+      (dl.tool_calls||[]).forEach(tc=>{
+        const k=tc.index!=null?tc.index:(tc.id?calls.length:Math.max(0,calls.length-1));
+        const c=calls[k]||(calls[k]={id:'',name:'',args:''});
+        if(tc.id)c.id=tc.id;
+        if(tc.function){if(tc.function.name)c.name=tc.function.name;if(tc.function.arguments)c.args+=tc.function.arguments}
+      });
+      if(ch.finish_reason)finish=ch.finish_reason;
+    }
+  };
+  const rd=res.body.getReader(),dec=new TextDecoder();let buf='';
+  for(;;){
+    const {done,value}=await rd.read();if(done)break;
+    buf+=dec.decode(value,{stream:true}).replace(/\r\n/g,'\n');
+    let i;while((i=buf.indexOf('\n\n'))>=0){const block=buf.slice(0,i);buf=buf.slice(i+2);feed(block)}
+  }
+  if(buf.trim())feed(buf);
+  return {text,calls:calls.filter(c=>c&&c.name).map((c,n)=>({id:c.id||('call_'+n),name:c.name,args:c.args})),finish};
+}
+
+async function grokTurn(messages,hooks,signal){
+  const tools=(window.ReaderBridge&&ReaderBridge.tools().length)?ReaderBridge.tools():null;
+  const turn=[{role:'system',content:(store.get(K_CSYS)||CHAT_SYS_DEFAULT)+(tools?TOOL_GUIDE:'')}].concat(messages);
+  chatStatusHook=hooks.status;
+  try{
+    for(let step=0;step<CHAT_MAX_STEPS;step++){
+      if(step>0)hooks.sep();
+      const r=await grokCall(turn,hooks.delta,signal,tools);
+      if(r.finish==='length')hooks.delta('\n\n(انقطع الرد لبلوغ الحد الأقصى للطول — اطلب «أكمل».)');
+      if(!r.calls.length)return;
+      turn.push({role:'assistant',content:r.text||null,tool_calls:r.calls.map(c=>({id:c.id,type:'function',function:{name:c.name,arguments:c.args||'{}'}}))});
+      for(const c of r.calls){
+        if(signal&&signal.aborted)throw new DOMException('aborted','AbortError');
+        let input={};try{input=JSON.parse(c.args||'{}')}catch{}
+        const lab=TOOL_LABELS[c.name];chatToolLabel=lab?lab(input):'⚙ '+c.name;hooks.status(chatToolLabel);
+        turn.push({role:'tool',tool_call_id:c.id,content:await ReaderBridge.execTool(c.name,input)});
+      }
+      chatToolLabel='';hooks.status('');
+    }
+    hooks.delta('\n\n(توقفت بعد '+CHAT_MAX_STEPS+' خطوات بحث — اطرح سؤالاً أضيق أو اطلب «أكمل».)');
+  }finally{chatStatusHook=null;chatToolLabel='';hooks.status('')}
+}
+function runTurn(m,hooks,signal){return (store.get(K_CPROV)==='grok'?grokTurn:claudeTurn)(m,hooks,signal)}
+
 function openChat(){
   loadChat();
-  if(!store.get(K_CKEY)){openChatSettings(true);return}
+  if(!chatReady()){openChatSettings(true);return}
   const list=el('div',{class:'chat-list'});
-  const ta=el('textarea',{class:'chat-input',rows:'1',placeholder:'اكتب سؤالك لـ Claude…','aria-label':'رسالة'});
+  const ta=el('textarea',{class:'chat-input',rows:'1',placeholder:'اكتب سؤالك…','aria-label':'رسالة'});
   const sendBtn=el('button',{type:'button',class:'chat-send',text:'إرسال'});
   const scroll=()=>{list.scrollTop=list.scrollHeight};
   const autosize=()=>{ta.style.height='auto';ta.style.height=Math.min(ta.scrollHeight,140)+'px'};
@@ -588,7 +666,7 @@ function openChat(){
     let acc='',raf=0;
     const paint=()=>{raf=0;mdRender(acc,out);scroll()};
     try{
-      await claudeTurn(buildMessages(),{
+      await runTurn(buildMessages(),{
         delta:d=>{acc+=d;out.classList.remove('typing');if(!raf)raf=requestAnimationFrame(paint)},
         sep:()=>{if(acc&&!/\n$/.test(acc))acc+='\n\n'},
         status:t=>{st.textContent=t;scroll()}
@@ -628,7 +706,7 @@ function openChat(){
       chatEpoch++;if(chatAbort)chatAbort.abort();chatHist=[];saveChat();openChat();
     }})
   ]);
-  openModal('محادثة مع Claude',el('div',{class:'chat-wrap'},[
+  openModal('محادثة مع '+providerName(),el('div',{class:'chat-wrap'},[
     bar,list,
     el('div',{class:'chat-compose'},[ta,sendBtn]),
     el('div',{class:'chat-note',text:'السجل محفوظ على هذا الجهاز فقط. Claude قد يخطئ — راجع أي اقتباس على المصدر.'})
@@ -640,35 +718,64 @@ function openChat(){
 }
 
 function openChatSettings(first){
+  const curProv=store.get(K_CPROV)==='grok'?'grok':'claude';
+  const prov=el('select',{class:'chat-field',id:'chatProvSel'},[
+    el('option',{value:'claude',text:'Claude (مفتاح Anthropic على هذا الجهاز)'}),
+    el('option',{value:'grok',text:'Grok (عبر دالة Supabase — المفتاح سرّي)'})]);
+  prov.value=curProv;
+  // --- Claude ---
   const cur=store.get(K_CMODEL)||CHAT_MODELS[0].id;
   const key=el('input',{type:'password',class:'chat-field',dir:'ltr',autocomplete:'off',spellcheck:'false',placeholder:'sk-ant-…',value:store.get(K_CKEY)||''});
-  const sel=el('select',{class:'chat-field'},CHAT_MODELS.map(m=>{const o=el('option',{value:m.id,text:m.name});if(m.id===cur)o.selected=true;return o}));
+  const sel=el('select',{class:'chat-field',id:'chatModelSel'},CHAT_MODELS.map(m=>{const o=el('option',{value:m.id,text:m.name});if(m.id===cur)o.selected=true;return o}));
+  const claudeBox=el('div',{},[
+    el('p',{text:'أنشئ المفتاح من console.anthropic.com ← API Keys. الفوترة منفصلة عن اشتراك تطبيق Claude، فاضبط حداً شهرياً للإنفاق هناك.'}),
+    el('p',{text:'يُحفظ المفتاح على هذا الجهاز فقط؛ لا يُرفع إلى GitHub ولا إلى المزامنة السحابية.'}),
+    el('label',{text:'مفتاح API'}),key,el('label',{text:'النموذج'}),sel
+  ]);
+  // --- Grok ---
+  const gurl=el('input',{type:'text',class:'chat-field',dir:'ltr',autocomplete:'off',spellcheck:'false',placeholder:'https://…supabase.co/functions/v1/research-assistant',value:store.get(K_GURL)||grokDefaultUrl()});
+  const gpass=el('input',{type:'password',class:'chat-field',dir:'ltr',autocomplete:'off',spellcheck:'false',placeholder:'ASSISTANT_PASSPHRASE',value:store.get(K_GPASS)||''});
+  const gmodel=el('input',{type:'text',class:'chat-field',dir:'ltr',autocomplete:'off',spellcheck:'false',placeholder:'اتركه فارغاً لاستعمال الافتراضي (grok-4)',value:store.get(K_GMODEL)||''});
+  const grokBox=el('div',{},[
+    el('p',{text:'مفتاح xAI يبقى سراً داخل دالة Supabase (السر XAI_API_KEY) ولا يظهر هنا. أدخل كلمة المرور التي ضبطتها في السر ASSISTANT_PASSPHRASE. الفوترة على حساب xAI بالاستهلاك وليست من باقة التطبيق.'}),
+    el('label',{text:'عنوان الدالة'}),gurl,el('label',{text:'كلمة مرور المساعد'}),gpass,el('label',{text:'اسم النموذج (اختياري)'}),gmodel
+  ]);
   const sys=el('textarea',{class:'chat-field',rows:'5'});sys.value=store.get(K_CSYS)||CHAT_SYS_DEFAULT;
   const msg=el('div',{class:'status',role:'status'});
+  const sync=()=>{claudeBox.style.display=prov.value==='grok'?'none':'';grokBox.style.display=prov.value==='grok'?'':'none'};
+  prov.addEventListener('change',sync);sync();
   const body=el('div',{class:'chat-form'},[
-    el('p',{text:first?'للربط المباشر مع Claude أدخل مفتاح API مرة واحدة على هذا الجهاز.':'إعدادات المحادثة'}),
-    el('p',{text:'أنشئ المفتاح من console.anthropic.com ← API Keys. الفوترة منفصلة عن اشتراك تطبيق Claude، فاضبط حداً شهرياً للإنفاق هناك.'}),
-    el('p',{text:'يُحفظ المفتاح على هذا الجهاز فقط؛ لا يُرفع إلى GitHub ولا إلى المزامنة السحابية، فأدخله مرة في كل جهاز تستخدمه.'}),
-    el('label',{text:'مفتاح API'}),key,
-    el('label',{text:'النموذج'}),sel,
+    el('p',{text:first?'اختر المزوّد وأدخل بياناته مرة واحدة على هذا الجهاز.':'إعدادات المحادثة'}),
+    el('label',{text:'المزوّد'}),prov,claudeBox,grokBox,
     el('label',{text:'تعليمات النظام (اختياري)'}),sys,
     el('div',{class:'row'},[
       el('button',{type:'button',text:'حفظ',onclick:()=>{
-        const k=key.value.trim();
-        if(!/^[\x21-\x7E]{20,}$/.test(k)){msg.textContent='المفتاح غير صالح — ألصقه كما هو من الكونسول (أحرف إنجليزية بلا مسافات).';return}
-        store.set(K_CKEY,k);store.set(K_CMODEL,sel.value);
-        const s=sys.value.trim();store.set(K_CSYS,s&&s!==CHAT_SYS_DEFAULT?s:'');
+        const s=sys.value.trim();
+        if(prov.value==='grok'){
+          const u=gurl.value.trim(),pw=gpass.value.trim();
+          if(!/^https:\/\/[^\s]+$/.test(u)){msg.textContent='عنوان الدالة يجب أن يبدأ بـ https://';return}
+          if(pw.length<16){msg.textContent='كلمة المرور قصيرة — يجب أن تطابق السر ASSISTANT_PASSPHRASE (16 حرفاً فأكثر).';return}
+          store.set(K_GURL,u);store.set(K_GPASS,pw);store.set(K_GMODEL,gmodel.value.trim());store.set(K_CPROV,'grok');
+        }else{
+          const k=key.value.trim();
+          if(!/^[\x21-\x7E]{20,}$/.test(k)){msg.textContent='المفتاح غير صالح — ألصقه كما هو من الكونسول (أحرف إنجليزية بلا مسافات).';return}
+          store.set(K_CKEY,k);store.set(K_CMODEL,sel.value);store.set(K_CPROV,'claude');
+        }
+        store.set(K_CSYS,s&&s!==CHAT_SYS_DEFAULT?s:'');
         openChat();
       }}),
       el('button',{type:'button',class:'secondary',text:'استعادة التعليمات الافتراضية',onclick:()=>{sys.value=CHAT_SYS_DEFAULT}}),
       el('button',{type:'button',class:'secondary',text:'حذف المفتاح من هذا الجهاز',onclick:()=>{
-        if(confirm('سيُحذف المفتاح من هذا الجهاز. متابعة؟')){try{localStorage.removeItem(K_CKEY)}catch{}key.value='';msg.textContent='✓ حُذف المفتاح.'}
+        if(confirm('سيُحذف مفتاح Claude من هذا الجهاز. متابعة؟')){try{localStorage.removeItem(K_CKEY)}catch{}key.value='';msg.textContent='✓ حُذف المفتاح.'}
       }}),
-      !first&&el('button',{type:'button',class:'ghost',text:'رجوع للمحادثة',onclick:()=>{if(store.get(K_CKEY))openChat();else closeModal()}})
+      el('button',{type:'button',class:'secondary',text:'حذف كلمة مرور Grok من هذا الجهاز',onclick:()=>{
+        if(confirm('ستُحذف كلمة المرور من هذا الجهاز. متابعة؟')){try{localStorage.removeItem(K_GPASS)}catch{}gpass.value='';msg.textContent='✓ حُذفت كلمة المرور.'}
+      }}),
+      !first&&el('button',{type:'button',class:'ghost',text:'رجوع للمحادثة',onclick:()=>{if(chatReady())openChat();else closeModal()}})
     ]),
     msg
   ]);
-  openModal('محادثة مع Claude',body);
+  openModal('إعدادات المحادثة',body);
 }
 
 function openAdd(){
