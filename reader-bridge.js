@@ -366,7 +366,7 @@ async function getUserData(a){
   var kind = a.kind || 'summary';
   var rs = a.reader ? findReader(a.reader) : allReaders();
   if(a.reader && !rs.length) return { error: 'لا قارئ بهذا المعرّف', reader_ids: readerIds() };
-  var limit = clampInt(a.limit, 1, 60, 25);
+  var limit = clampInt(a.limit, 1, a.export ? 500 : 60, 25);
   if(kind === 'summary'){
     var l = await listLibrary({});
     return { kind: 'summary', last_opened: lastRead(), readers: l.readers.filter(function(x){ return !a.reader || rs.some(function(r){ return r.id === x.id; }); }) };
@@ -462,7 +462,7 @@ async function searchTexts(a){
   var results = hits.slice(0, limit).map(function(h){
     var p = h.b._p[h.i];
     return { reader: h.r.id, reader_title: h.r.title, book_id: h.b.id, book: h.b.title, pid: p.pid,
-      section: p.section || undefined, text: snippetOf(p, h.b._n[h.i], stems) };
+      section: p.section || undefined, text: a.full ? p.text : snippetOf(p, h.b._n[h.i], stems) };
   });
   return { query: a.query, mode: mode, books_scanned: scanned, total_hits: hits.length,
     hits_by_book: Object.keys(perBook).map(function(k){ return perBook[k]; }).sort(function(x, y){ return y.hits - x.hits; }).slice(0, 12),
@@ -497,6 +497,95 @@ async function readPassage(a){
   var last = out.length ? out[out.length - 1].pid : from - 1;
   return { reader: rs[0].id, book_id: b.id, book: b.title, author: b.author, total_paragraphs: N,
     from_pid: from, to_pid: last, next_pid: last < N ? last + 1 : null, paragraphs: out };
+}
+
+
+/* ---------- تصدير سياق كنص واحد يُلصق في تطبيق Claude (بلا API) ---------- */
+function exportHeader(){
+  return [
+    '# سياق من موقعي «القوارئ العشر»',
+    'هذه بيانات قراءتي وبحثي من مكتبتي، منسوخة من الموقع. «pid» هو رقم الفقرة كما يظهر في القارئ.',
+    'اعتمد عليها وحدها فيما تنقله عن المصادر، ولا تخترع اقتباساً أو رقم فقرة غير مذكور هنا، وإن كان ما أحتاجه غير موجود فقل ذلك.',
+    'النصوص الأصلية في المكتبة إنجليزية ويونانية ولاتينية وفرنسية في معظمها؛ اشرح لي بالعربية مع إبقاء المصطلحات الفنية بين قوسين.'
+  ].join('\n');
+}
+function loc(it){
+  var parts = [it.reader_title, it.book].filter(Boolean);
+  if(it.pid != null) parts.push('فقرة ' + it.pid);
+  return parts.join(' › ');
+}
+function oneLine(s){ return String(s == null ? '' : s).replace(/\s+/g, ' ').trim(); }
+
+async function exportText(o){
+  o = o || {};
+  var kinds = o.kinds || { highlights: true, notes: true };
+  var maxChars = clampInt(o.maxChars, 4000, 120000, 45000);
+  var reader = o.reader && o.reader !== 'all' ? o.reader : undefined;
+  var filter = o.filter ? String(o.filter) : undefined;
+  var question = o.question ? String(o.question).trim() : '';
+  var sections = [];   // {title, lines:[...], total}
+  var counts = {};
+
+  function userSec(kind, title, fmt){
+    return getUserData({ kind: kind, reader: reader, query: filter, limit: 500, export: true }).then(function(r){
+      if(r.error) throw new Error(r.error);
+      counts[kind] = r.total;
+      if(r.total) sections.push({ title: title + ' (' + r.total + ')', lines: r.items.map(fmt), total: r.total });
+    });
+  }
+  if(kinds.highlights) await userSec('highlights', 'تظليلي', function(it){
+    return '- [' + loc(it) + (it.date ? ' · ' + it.date : '') + '] «' + oneLine(it.text) + '»' + (it.note ? '\n  ↳ ملاحظتي: ' + oneLine(it.note) : '');
+  });
+  if(kinds.notes) await userSec('notes', 'ملاحظاتي', function(it){
+    return '- [' + loc(it) + (it.date ? ' · ' + it.date : '') + '] ' + oneLine(it.note) + (it.about_text ? '\n  ↳ عن: «' + oneLine(it.about_text) + '»' : '');
+  });
+  if(kinds.bookmarks) await userSec('bookmarks', 'إشاراتي', function(it){
+    return '- [' + loc(it) + (it.date ? ' · ' + it.date : '') + '] «' + oneLine(it.text) + '»' + (it.note ? '\n  ↳ ملاحظتي: ' + oneLine(it.note) : '');
+  });
+  if(kinds.positions){
+    var pr = await getUserData({ kind: 'positions', reader: reader, limit: 500, export: true });
+    if(pr.error) throw new Error(pr.error);
+    counts.positions = pr.total;
+    var plines = [];
+    if(pr.last_opened) plines.push('- آخر ما فتحته: ' + [pr.last_opened.reader_title, pr.last_opened.book, pr.last_opened.pid != null ? 'فقرة ' + pr.last_opened.pid : ''].filter(Boolean).join(' › ') + (pr.last_opened.date ? ' · ' + pr.last_opened.date : ''));
+    pr.items.forEach(function(it){
+      var where = it.mode === 'pid' && it.saved_pid != null
+        ? 'فقرة محفوظة ' + it.saved_pid + (it.saved_pid_snippet ? ' («' + oneLine(it.saved_pid_snippet) + '»)' : '')
+        : 'موضع تقريبي' + (it.approx_pid != null ? ' (فقرة ~' + it.approx_pid + ')' : '') + (it.ratio_percent != null ? ' ' + it.ratio_percent + '%' : '') + (it.page != null ? ' صفحة ' + it.page : '');
+      plines.push('- ' + [it.reader_title, it.book || it.book_id].filter(Boolean).join(' › ') + ': ' + where + (it.last_activity ? ' · آخر نشاط ' + it.last_activity : '') + (it.marked_read ? ' · تمت قراءته' : ''));
+    });
+    if(plines.length) sections.push({ title: 'مواضع توقفي (' + pr.total + ')', lines: plines, total: plines.length });
+  }
+  var sq = o.search && o.search.query ? o.search : null;
+  if(sq){
+    var sr = await searchTexts({ query: sq.query, mode: sq.mode, reader: reader || 'all', book: sq.book, limit: clampInt(sq.limit, 1, 30, 10), full: true });
+    if(sr.error) throw new Error(sr.error);
+    counts.search = sr.total_hits;
+    if(sr.results.length){
+      sections.push({ title: 'نتائج البحث في النصوص عن «' + oneLine(sq.query) + '» (' + sr.total_hits + ' فقرة، المعروض ' + sr.results.length + ')',
+        lines: sr.results.map(function(x){ return '### ' + loc(x) + (x.section ? ' — ' + x.section : '') + '\n' + oneLine(x.text); }), total: sr.total_hits });
+    }
+  }
+
+  var head = exportHeader();
+  var tail = question ? '\n\n## سؤالي\n' + question : '';
+  var rem = maxChars - head.length - tail.length - 200;
+  var out = [head], truncated = false;
+  if(!sections.length) out.push('\n(لم يُعثر على بيانات مطابقة لما اخترته.)');
+  sections.forEach(function(sec, i){
+    var cap = Math.max(300, Math.floor(rem / (sections.length - i))), used = 0, kept = [];
+    for(var k = 0; k < sec.lines.length; k++){
+      var L = sec.lines[k].length + 1;
+      if(used + L > cap && kept.length){ break; }
+      kept.push(sec.lines[k]); used += L;
+    }
+    var omitted = sec.lines.length - kept.length;
+    if(omitted > 0){ truncated = true; kept.push('(… ' + omitted + ' عنصراً إضافياً لم يُدرج لطول النص؛ ضيّق الاختيار بالقارئ أو بكلمة فلترة.)'); }
+    rem -= used;
+    out.push('\n## ' + sec.title + '\n' + kept.join('\n'));
+  });
+  var text = out.join('\n') + tail;
+  return { text: text, counts: counts, truncated: truncated, chars: text.length };
 }
 
 /* ---------- تعريف الأدوات لواجهة Anthropic ---------- */
@@ -559,7 +648,7 @@ async function execTool(name, input){
 function clearCache(){ loadCache = {}; }
 
 root.ReaderBridge = {
-  configure: configure, tools: function(){ return TOOLS; }, execTool: execTool, clearCache: clearCache,
+  configure: configure, tools: function(){ return TOOLS; }, execTool: execTool, clearCache: clearCache, exportText: exportText,
   _t: { norm: norm, paras: paras, loadReader: loadReader, findReader: findReader, displayContentOf: displayContentOf,
         extractSections: extractSections, paragraphStartLines: paragraphStartLines, splitParagraphOffsets: splitParagraphOffsets,
         searchTexts: searchTexts, readPassage: readPassage, getUserData: getUserData, listLibrary: listLibrary }

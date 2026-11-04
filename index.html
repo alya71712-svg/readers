@@ -134,6 +134,10 @@ body.panel-hidden .panel-toggle{position:fixed;right:0;top:50%;transform:transla
 .chat-note{font-size:11px;color:var(--muted);text-align:center}
 .chat-status{font-size:13px;color:var(--accent);text-align:start;padding:0 4px}
 .chat-status:empty{display:none}
+.exp-chk{display:flex;align-items:center;gap:8px;margin:5px 0;font-size:14px;font-weight:400}
+.exp-chk input{width:18px;height:18px;margin:0}
+.exp-out{min-height:220px;font-size:13px;line-height:1.7;resize:vertical}
+.exp-info{font-size:13px;color:var(--accent);min-height:20px;margin:8px 0}
 .chat-form label{display:block;margin:12px 0 5px;font-weight:700;font-size:14px}
 .chat-form p{margin:6px 0;font-size:13px;line-height:1.8;color:var(--muted)}
 .chat-form .row{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
@@ -165,6 +169,7 @@ body.panel-hidden .panel-toggle{position:fixed;right:0;top:50%;transform:transla
           <button class="nav-btn" type="button" onclick="recheck()"><span class="nav-icon">⟳</span>إعادة فحص الملفات</button>
           <button class="nav-btn" type="button" onclick="openCloud()"><span class="nav-icon">☁</span>المزامنة السحابية</button>
           <button class="nav-btn" type="button" onclick="openChat()"><span class="nav-icon">💬</span>محادثة مع Claude أو Grok</button>
+          <button class="nav-btn" type="button" onclick="openExport()"><span class="nav-icon">📋</span>نسخ سياق للتطبيق</button>
         </div>
         <div class="panel-note">كل قارئ يحفظ علاماته وملاحظاته وتظليله ومكان توقفك على هذا المتصفح، وتُنسخ سحابياً عند تفعيل «المزامنة السحابية» لتظهر على أي جهاز.</div>
       </aside>
@@ -776,6 +781,56 @@ function openChatSettings(first){
     msg
   ]);
   openModal('إعدادات المحادثة',body);
+}
+
+// ---------- نسخ سياق للتطبيق: يجمّع تظليلك وملاحظاتك وبحثك في نص واحد تلصقه في تطبيق Claude (بلا مفتاح ولا رصيد) ----------
+function openExport(){
+  const RB=window.ReaderBridge;
+  if(!RB||!RB.exportText){openModal('نسخ سياق للتطبيق',el('p',{text:'وحدة الربط لم تُحمَّل — أعد تحميل الصفحة.'}));return}
+  const rsel=el('select',{class:'chat-field',id:'expReader'},[el('option',{value:'all',text:'كل القوارئ'})].concat(READERS.filter(r=>r.texts).map(r=>el('option',{value:r.id,text:r.title}))));
+  const chk=(label,on)=>{const i=el('input',{type:'checkbox'});i.checked=!!on;return {i,row:el('label',{class:'exp-chk'},[i,document.createTextNode(label)])}};
+  const cH=chk('تظليلي (مع ملاحظة كل تظليل)',true),cN=chk('ملاحظاتي',true),cB=chk('إشاراتي العادية',false),cP=chk('مواضع توقفي (يحمّل ملفات القوارئ المعنية)',false);
+  const filt=el('input',{type:'text',class:'chat-field',placeholder:'مثال: wife أو زوجة',autocomplete:'off'});
+  const q=el('input',{type:'text',class:'chat-field',dir:'ltr',placeholder:'مثال: husband wife — بلغة النص (الإنجليزية غالباً)',autocomplete:'off'});
+  const mode=el('select',{class:'chat-field'},[['all_words','كل الكلمات في الفقرة'],['any','أي كلمة'],['phrase','العبارة كما هي']].map(([v,t])=>el('option',{value:v,text:t})));
+  const lim=el('select',{class:'chat-field'},[5,10,20,30].map(n=>{const o=el('option',{value:String(n),text:n+' فقرات'});if(n===10)o.selected=true;return o}));
+  const qu=el('textarea',{class:'chat-field',rows:'3',placeholder:'اكتب سؤالك هنا ليُضاف في آخر النص (اختياري)'});
+  const out=el('textarea',{class:'chat-field exp-out',readonly:'readonly',placeholder:'سيظهر هنا النص الجاهز للنسخ…'});
+  const info=el('div',{class:'exp-info',role:'status'});
+  const copyBtn=el('button',{type:'button',class:'secondary',text:'📋 نسخ',disabled:'disabled'});
+  const buildBtn=el('button',{type:'button',text:'تجهيز النص'});
+  const names={highlights:'تظليل',notes:'ملاحظات',bookmarks:'إشارات',positions:'مواضع',search:'فقرات مطابقة'};
+  buildBtn.onclick=async()=>{
+    buildBtn.disabled=true;copyBtn.disabled=true;out.value='';info.textContent='جارٍ التجهيز…';
+    chatStatusHook=t=>{info.textContent=t||'جارٍ التجهيز…'};
+    try{
+      const r=await RB.exportText({reader:rsel.value,kinds:{highlights:cH.i.checked,notes:cN.i.checked,bookmarks:cB.i.checked,positions:cP.i.checked},filter:filt.value.trim(),
+        search:q.value.trim()?{query:q.value.trim(),mode:mode.value,limit:Number(lim.value)}:null,question:qu.value});
+      out.value=r.text;
+      info.textContent=Object.keys(r.counts).map(k=>(names[k]||k)+': '+r.counts[k]).join(' · ')+' — '+r.chars.toLocaleString('ar-EG')+' حرفاً'+(r.truncated?' (اقتُطع بعضها لطول النص)':'');
+      copyBtn.disabled=false;
+    }catch(e){info.textContent='تعذّر التجهيز: '+((e&&e.message)||e)}
+    finally{chatStatusHook=null;buildBtn.disabled=false}
+  };
+  copyBtn.onclick=async()=>{
+    try{await navigator.clipboard.writeText(out.value);info.textContent='✓ نُسخ النص — افتح تطبيق Claude والصقه في محادثة جديدة.'}
+    catch{
+      out.focus();out.select();try{out.setSelectionRange(0,out.value.length)}catch{}
+      let done=false;try{done=document.execCommand('copy')}catch{}
+      info.textContent=done?'✓ نُسخ النص — افتح تطبيق Claude والصقه في محادثة جديدة.':'تعذّر النسخ التلقائي: النص محدَّد، اضغط عليه مطولاً واختر «نسخ».';
+    }
+  };
+  openModal('نسخ سياق للتطبيق',el('div',{class:'chat-form'},[
+    el('p',{text:'يجمع تظليلك وملاحظاتك وبحثك في نص واحد تلصقه في تطبيق Claude، فتستعمل باقتك الحالية دون مفتاح API ولا رصيد. البيانات تُقرأ من هذا الجهاز فقط.'}),
+    el('label',{text:'القارئ'}),rsel,
+    el('label',{text:'ما الذي يُضمَّن؟'}),cH.row,cN.row,cB.row,cP.row,
+    el('label',{text:'فلترة بكلمة (اختياري — تطبق على التظليل والملاحظات والإشارات)'}),filt,
+    el('label',{text:'بحث في نصوص الكتب (اختياري)'}),q,
+    el('div',{class:'row'},[mode,lim]),
+    el('label',{text:'سؤالك (اختياري)'}),qu,
+    el('div',{class:'row'},[buildBtn,copyBtn]),
+    info,out
+  ]));
 }
 
 function openAdd(){
