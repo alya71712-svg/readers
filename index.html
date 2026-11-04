@@ -168,7 +168,7 @@ body.panel-hidden .panel-toggle{position:fixed;right:0;top:50%;transform:transla
           <button class="nav-btn" type="button" onclick="openAdd()"><span class="nav-icon">✎</span>كيف أضيف أو أغيّر قارئاً</button>
           <button class="nav-btn" type="button" onclick="recheck()"><span class="nav-icon">⟳</span>إعادة فحص الملفات</button>
           <button class="nav-btn" type="button" onclick="openCloud()"><span class="nav-icon">☁</span>المزامنة السحابية</button>
-          <button class="nav-btn" type="button" onclick="openChat()"><span class="nav-icon">💬</span>محادثة مع Claude أو Grok</button>
+          <button class="nav-btn" type="button" onclick="openChat()"><span class="nav-icon">💬</span>محادثة مع Claude أو Grok أو Gemini</button>
           <button class="nav-btn" type="button" onclick="openExport()"><span class="nav-icon">📋</span>نسخ سياق للتطبيق</button>
         </div>
         <div class="panel-note">كل قارئ يحفظ علاماته وملاحظاته وتظليله ومكان توقفك على هذا المتصفح، وتُنسخ سحابياً عند تفعيل «المزامنة السحابية» لتظهر على أي جهاز.</div>
@@ -431,6 +431,7 @@ const CHAT_MODELS=[
  {id:'claude-fable-5-1',name:'Fable 5.1 — الأقوى'}
 ];
 const K_CPROV='readers_chat_provider',K_GURL='readers_grok_url',K_GPASS='readers_grok_pass',K_GMODEL='readers_grok_model';
+const K_GEMKEY='readers_gemini_key',K_GEMMODEL='readers_gemini_model',GEM_DEFAULT='gemini-2.5-flash';
 const K_CKEY='readers_claude_key',K_CMODEL='readers_claude_model',K_CSYS='readers_claude_system',K_CHIST='readers_claude_history';
 const CHAT_SYS_DEFAULT='أنت مساعد بحثي داخل موقع «القوارئ العشر» لنصوص الإسكندرية القديمة (أوريجانوس وفيلون ويوسيفوس وهرقل ومصادرهم). أجب بالعربية، وأبقِ المصطلحات الفنية بين قوسين، وميّز بوضوح بين ما تقوله المصادر وما هو استنتاج، ولا تخترع اقتباسات أو أرقام فقرات.';
 const CHAT_MAX_SEND=30,CHAT_MAX_KEEP=60;
@@ -564,8 +565,8 @@ async function claudeTurn(messages,hooks,signal){
 
 
 // ---------- Grok (xAI) عبر دالة Supabase تحفظ المفتاح سراً ----------
-function chatReady(){return store.get(K_CPROV)==='grok'?!!(store.get(K_GURL)&&store.get(K_GPASS)):!!store.get(K_CKEY)}
-function providerName(){return store.get(K_CPROV)==='grok'?'Grok':'Claude'}
+function chatReady(){const p=store.get(K_CPROV);return p==='grok'?!!(store.get(K_GURL)&&store.get(K_GPASS)):p==='gemini'?!!store.get(K_GEMKEY):!!store.get(K_CKEY)}
+function providerName(){const p=store.get(K_CPROV);return p==='grok'?'Grok':p==='gemini'?'Gemini':'Claude'}
 function grokDefaultUrl(){const u=String((window.READER_CLOUD_CONFIG||{}).url||'').replace(/\/+$/,'');return u?u+'/functions/v1/research-assistant':''}
 
 // طلب واحد بصيغة OpenAI-compatible. يعيد {text,calls:[{id,name,args}],finish}
@@ -637,7 +638,92 @@ async function grokTurn(messages,hooks,signal){
     hooks.delta('\n\n(توقفت بعد '+CHAT_MAX_STEPS+' خطوات بحث — اطرح سؤالاً أضيق أو اطلب «أكمل».)');
   }finally{chatStatusHook=null;chatToolLabel='';hooks.status('')}
 }
-function runTurn(m,hooks,signal){return (store.get(K_CPROV)==='grok'?grokTurn:claudeTurn)(m,hooks,signal)}
+
+// ---------- Gemini (Google) مباشرة من المتصفح بمفتاح على هذا الجهاز ----------
+// مخطط الأداة لصيغة Gemini: نحذف الحقول غير المدعومة (additionalProperties) ومصفوفات required الفارغة
+function gemSchema(s){
+  if(Array.isArray(s))return s.map(gemSchema);
+  if(!s||typeof s!=='object')return s;
+  const o={};
+  for(const k of Object.keys(s)){
+    if(k==='additionalProperties'||k==='$schema')continue;
+    if(k==='required'&&Array.isArray(s[k])&&!s[k].length)continue;
+    o[k]=gemSchema(s[k]);
+  }
+  return o;
+}
+async function geminiCall(sysText,contents,onDelta,signal,tools){
+  const key=store.get(K_GEMKEY),model=(store.get(K_GEMMODEL)||GEM_DEFAULT).trim()||GEM_DEFAULT;
+  const body={systemInstruction:{parts:[{text:sysText}]},contents,generationConfig:{maxOutputTokens:4096}};
+  if(tools)body.tools=[{functionDeclarations:tools.map(t=>({name:t.name,description:t.description,parameters:gemSchema(t.input_schema)}))}];
+  const res=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+encodeURIComponent(model)+':streamGenerateContent?alt=sse',{
+    method:'POST',signal,headers:{'content-type':'application/json','x-goog-api-key':key},body:JSON.stringify(body)
+  });
+  if(!res.ok){
+    let m='',st='';try{const j=await res.json();m=(j.error&&j.error.message)||'';st=(j.error&&j.error.status)||''}catch{}
+    const base=(res.status===400&&/api key/i.test(m))||res.status===401?'مفتاح Gemini غير صالح — افتح ⚙ الإعدادات وتحقق منه.'
+      :res.status===403?'رفضت Google الطلب (403): قد يكون المفتاح غير مفعّل لهذه الخدمة أو أن بلدك غير مدعوم.'
+      :res.status===404?'اسم النموذج غير موجود — عدّله في ⚙ الإعدادات.'
+      :res.status===429||st==='RESOURCE_EXHAUSTED'?'استنفدت الحصة المجانية أو تجاوزت حد الطلبات — انتظر قليلاً أو بدّل النموذج.'
+      :res.status>=500?'خدمة Gemini مشغولة حالياً — أعد المحاولة.'
+      :'رفض الخادم الطلب ('+res.status+').';
+    throw new Error(base+(m?'\n'+m:''));
+  }
+  let text='',finish=null;const parts=[],calls=[];
+  const feed=block=>{
+    for(const line of block.split('\n')){
+      if(!line.startsWith('data:'))continue;
+      const d=line.slice(5).trim();if(!d)continue;
+      let ev;try{ev=JSON.parse(d)}catch{continue}
+      if(ev.error)throw new Error(ev.error.message||'خطأ من الخادم أثناء البث.');
+      if(ev.promptFeedback&&ev.promptFeedback.blockReason)throw new Error('حجبت Google الطلب لأسباب تتعلق بالسلامة ('+ev.promptFeedback.blockReason+') — أعد صياغة السؤال.');
+      const c=ev.candidates&&ev.candidates[0];if(!c)continue;
+      for(const pt of (c.content&&c.content.parts)||[]){
+        parts.push(pt);   // نحتفظ بالأجزاء كما وصلت (فيها thoughtSignature للنماذج الأحدث) لإعادتها كما هي
+        if(typeof pt.text==='string'&&!pt.thought){text+=pt.text;if(pt.text)onDelta(pt.text)}
+        if(pt.functionCall)calls.push({name:pt.functionCall.name,args:pt.functionCall.args||{}});
+      }
+      if(c.finishReason)finish=c.finishReason;
+    }
+  };
+  const rd=res.body.getReader(),dec=new TextDecoder();let buf='';
+  for(;;){
+    const {done,value}=await rd.read();if(done)break;
+    buf+=dec.decode(value,{stream:true}).replace(/\r\n/g,'\n');
+    let i;while((i=buf.indexOf('\n\n'))>=0){const block=buf.slice(0,i);buf=buf.slice(i+2);feed(block)}
+  }
+  if(buf.trim())feed(buf);
+  return {parts,text,calls,finish};
+}
+async function geminiTurn(messages,hooks,signal){
+  const tools=(window.ReaderBridge&&ReaderBridge.tools().length)?ReaderBridge.tools():null;
+  const sysText=(store.get(K_CSYS)||CHAT_SYS_DEFAULT)+(tools?TOOL_GUIDE:'');
+  const turn=messages.map(m=>({role:m.role==='assistant'?'model':'user',parts:[{text:m.content}]}));
+  chatStatusHook=hooks.status;
+  try{
+    for(let step=0;step<CHAT_MAX_STEPS;step++){
+      if(step>0)hooks.sep();
+      const r=await geminiCall(sysText,turn,hooks.delta,signal,tools);
+      if(r.finish==='MAX_TOKENS')hooks.delta('\n\n(انقطع الرد لبلوغ الحد الأقصى للطول — اطلب «أكمل».)');
+      if(!r.calls.length){
+        if(!r.text.trim()&&r.finish&&r.finish!=='STOP'&&r.finish!=='MAX_TOKENS')throw new Error('لم يُنتج Gemini ردّاً ('+r.finish+') — أعد صياغة السؤال أو جرّب نموذجاً آخر.');
+        return;
+      }
+      turn.push({role:'model',parts:r.parts});
+      const resp=[];
+      for(const c of r.calls){
+        if(signal&&signal.aborted)throw new DOMException('aborted','AbortError');
+        const lab=TOOL_LABELS[c.name];chatToolLabel=lab?lab(c.args):'⚙ '+c.name;hooks.status(chatToolLabel);
+        let out=await ReaderBridge.execTool(c.name,c.args),val;try{val=JSON.parse(out)}catch{val=out}
+        resp.push({functionResponse:{name:c.name,response:{result:val}}});
+      }
+      turn.push({role:'user',parts:resp});
+      chatToolLabel='';hooks.status('');
+    }
+    hooks.delta('\n\n(توقفت بعد '+CHAT_MAX_STEPS+' خطوات بحث — اطرح سؤالاً أضيق أو اطلب «أكمل».)');
+  }finally{chatStatusHook=null;chatToolLabel='';hooks.status('')}
+}
+function runTurn(m,hooks,signal){const p=store.get(K_CPROV);return (p==='grok'?grokTurn:p==='gemini'?geminiTurn:claudeTurn)(m,hooks,signal)}
 
 function openChat(){
   loadChat();
@@ -723,10 +809,11 @@ function openChat(){
 }
 
 function openChatSettings(first){
-  const curProv=store.get(K_CPROV)==='grok'?'grok':'claude';
+  const curProv=['grok','gemini'].includes(store.get(K_CPROV))?store.get(K_CPROV):'claude';
   const prov=el('select',{class:'chat-field',id:'chatProvSel'},[
     el('option',{value:'claude',text:'Claude (مفتاح Anthropic على هذا الجهاز)'}),
-    el('option',{value:'grok',text:'Grok (عبر دالة Supabase — المفتاح سرّي)'})]);
+    el('option',{value:'grok',text:'Grok (عبر دالة Supabase — المفتاح سرّي)'}),
+    el('option',{value:'gemini',text:'Gemini (مفتاح Google على هذا الجهاز — طبقة مجانية)'})]);
   prov.value=curProv;
   // --- Claude ---
   const cur=store.get(K_CMODEL)||CHAT_MODELS[0].id;
@@ -745,18 +832,31 @@ function openChatSettings(first){
     el('p',{text:'مفتاح xAI يبقى سراً داخل دالة Supabase (السر XAI_API_KEY) ولا يظهر هنا. أدخل كلمة المرور التي ضبطتها في السر ASSISTANT_PASSPHRASE. الفوترة على حساب xAI بالاستهلاك وليست من باقة التطبيق.'}),
     el('label',{text:'عنوان الدالة'}),gurl,el('label',{text:'كلمة مرور المساعد'}),gpass,el('label',{text:'اسم النموذج (اختياري)'}),gmodel
   ]);
+  // --- Gemini ---
+  const gemKey=el('input',{type:'password',class:'chat-field',dir:'ltr',autocomplete:'off',spellcheck:'false',placeholder:'AIza…',value:store.get(K_GEMKEY)||''});
+  const gemModel=el('input',{type:'text',class:'chat-field',dir:'ltr',autocomplete:'off',spellcheck:'false',list:'gemModels',placeholder:GEM_DEFAULT,value:store.get(K_GEMMODEL)||GEM_DEFAULT});
+  const gemBox=el('div',{},[
+    el('p',{text:'أنشئ مفتاحاً مجانياً من aistudio.google.com ← Get API key (بلا بطاقة). المفتاح يُحفظ على هذا الجهاز فقط، لا في GitHub ولا في المزامنة.'}),
+    el('p',{text:'تنبيه خصوصية: في الطبقة المجانية قد تستخدم Google ما ترسله (ومنه نصوص تظليلك وملاحظاتك التي تطلبها الأدوات) لتحسين منتجاتها. الطبقة المدفوعة لا تفعل ذلك. والحصة المجانية محدودة وتتغير شروطها.'}),
+    el('label',{text:'مفتاح Gemini'}),gemKey,el('label',{text:'اسم النموذج'}),gemModel,
+    el('datalist',{id:'gemModels'},['gemini-2.5-flash','gemini-2.5-pro','gemini-2.5-flash-lite'].map(v=>el('option',{value:v})))
+  ]);
   const sys=el('textarea',{class:'chat-field',rows:'5'});sys.value=store.get(K_CSYS)||CHAT_SYS_DEFAULT;
   const msg=el('div',{class:'status',role:'status'});
-  const sync=()=>{claudeBox.style.display=prov.value==='grok'?'none':'';grokBox.style.display=prov.value==='grok'?'':'none'};
+  const sync=()=>{claudeBox.style.display=prov.value==='claude'?'':'none';grokBox.style.display=prov.value==='grok'?'':'none';gemBox.style.display=prov.value==='gemini'?'':'none'};
   prov.addEventListener('change',sync);sync();
   const body=el('div',{class:'chat-form'},[
     el('p',{text:first?'اختر المزوّد وأدخل بياناته مرة واحدة على هذا الجهاز.':'إعدادات المحادثة'}),
-    el('label',{text:'المزوّد'}),prov,claudeBox,grokBox,
+    el('label',{text:'المزوّد'}),prov,claudeBox,grokBox,gemBox,
     el('label',{text:'تعليمات النظام (اختياري)'}),sys,
     el('div',{class:'row'},[
       el('button',{type:'button',text:'حفظ',onclick:()=>{
         const s=sys.value.trim();
-        if(prov.value==='grok'){
+        if(prov.value==='gemini'){
+          const k=gemKey.value.trim();
+          if(!/^[\x21-\x7E]{20,}$/.test(k)){msg.textContent='مفتاح Gemini غير صالح — ألصقه كما هو من AI Studio (أحرف إنجليزية بلا مسافات).';return}
+          store.set(K_GEMKEY,k);store.set(K_GEMMODEL,gemModel.value.trim()||GEM_DEFAULT);store.set(K_CPROV,'gemini');
+        }else if(prov.value==='grok'){
           const u=gurl.value.trim(),pw=gpass.value.trim();
           if(!/^https:\/\/[^\s]+$/.test(u)){msg.textContent='عنوان الدالة يجب أن يبدأ بـ https://';return}
           if(pw.length<16){msg.textContent='كلمة المرور قصيرة — يجب أن تطابق السر ASSISTANT_PASSPHRASE (16 حرفاً فأكثر).';return}
@@ -775,6 +875,9 @@ function openChatSettings(first){
       }}),
       el('button',{type:'button',class:'secondary',text:'حذف كلمة مرور Grok من هذا الجهاز',onclick:()=>{
         if(confirm('ستُحذف كلمة المرور من هذا الجهاز. متابعة؟')){try{localStorage.removeItem(K_GPASS)}catch{}gpass.value='';msg.textContent='✓ حُذفت كلمة المرور.'}
+      }}),
+      el('button',{type:'button',class:'secondary',text:'حذف مفتاح Gemini من هذا الجهاز',onclick:()=>{
+        if(confirm('سيُحذف مفتاح Gemini من هذا الجهاز. متابعة؟')){try{localStorage.removeItem(K_GEMKEY)}catch{}gemKey.value='';msg.textContent='✓ حُذف المفتاح.'}
       }}),
       !first&&el('button',{type:'button',class:'ghost',text:'رجوع للمحادثة',onclick:()=>{if(chatReady())openChat();else closeModal()}})
     ]),
