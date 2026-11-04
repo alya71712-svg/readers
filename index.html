@@ -431,7 +431,7 @@ const CHAT_MODELS=[
  {id:'claude-fable-5-1',name:'Fable 5.1 — الأقوى'}
 ];
 const K_CPROV='readers_chat_provider',K_GURL='readers_grok_url',K_GPASS='readers_grok_pass',K_GMODEL='readers_grok_model';
-const K_GEMKEY='readers_gemini_key',K_GEMMODEL='readers_gemini_model',GEM_DEFAULT='gemini-2.5-flash';
+const K_GEMKEY='readers_gemini_key',K_GEMMODEL='readers_gemini_model',GEM_DEFAULT='gemini-3.8-flash',GEM_OLD='gemini-2.5-flash';
 const K_CKEY='readers_claude_key',K_CMODEL='readers_claude_model',K_CSYS='readers_claude_system',K_CHIST='readers_claude_history';
 const CHAT_SYS_DEFAULT='أنت مساعد بحثي داخل موقع «القوارئ العشر» لنصوص الإسكندرية القديمة (أوريجانوس وفيلون ويوسيفوس وهرقل ومصادرهم). أجب بالعربية، وأبقِ المصطلحات الفنية بين قوسين، وميّز بوضوح بين ما تقوله المصادر وما هو استنتاج، ولا تخترع اقتباسات أو أرقام فقرات.';
 const CHAT_MAX_SEND=30,CHAT_MAX_KEEP=60;
@@ -653,7 +653,7 @@ function gemSchema(s){
   return o;
 }
 async function geminiCall(sysText,contents,onDelta,signal,tools){
-  const key=store.get(K_GEMKEY),model=(store.get(K_GEMMODEL)||GEM_DEFAULT).trim()||GEM_DEFAULT;
+  const key=store.get(K_GEMKEY);let model=(store.get(K_GEMMODEL)||GEM_DEFAULT).trim()||GEM_DEFAULT;if(model===GEM_OLD)model=GEM_DEFAULT;
   const body={systemInstruction:{parts:[{text:sysText}]},contents,generationConfig:{maxOutputTokens:4096}};
   if(tools)body.tools=[{functionDeclarations:tools.map(t=>({name:t.name,description:t.description,parameters:gemSchema(t.input_schema)}))}];
   const res=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+encodeURIComponent(model)+':streamGenerateContent?alt=sse',{
@@ -834,12 +834,12 @@ function openChatSettings(first){
   ]);
   // --- Gemini ---
   const gemKey=el('input',{type:'password',class:'chat-field',dir:'ltr',autocomplete:'off',spellcheck:'false',placeholder:'AIza…',value:store.get(K_GEMKEY)||''});
-  const gemModel=el('input',{type:'text',class:'chat-field',dir:'ltr',autocomplete:'off',spellcheck:'false',list:'gemModels',placeholder:GEM_DEFAULT,value:store.get(K_GEMMODEL)||GEM_DEFAULT});
+  const gemModel=el('input',{type:'text',class:'chat-field',dir:'ltr',autocomplete:'off',spellcheck:'false',list:'gemModels',placeholder:GEM_DEFAULT,value:(store.get(K_GEMMODEL)&&store.get(K_GEMMODEL)!==GEM_OLD)?store.get(K_GEMMODEL):GEM_DEFAULT});
   const gemBox=el('div',{},[
     el('p',{text:'أنشئ مفتاحاً مجانياً من aistudio.google.com ← Get API key (بلا بطاقة). المفتاح يُحفظ على هذا الجهاز فقط، لا في GitHub ولا في المزامنة.'}),
     el('p',{text:'تنبيه خصوصية: في الطبقة المجانية قد تستخدم Google ما ترسله (ومنه نصوص تظليلك وملاحظاتك التي تطلبها الأدوات) لتحسين منتجاتها. الطبقة المدفوعة لا تفعل ذلك. والحصة المجانية محدودة وتتغير شروطها.'}),
     el('label',{text:'مفتاح Gemini'}),gemKey,el('label',{text:'اسم النموذج'}),gemModel,
-    el('datalist',{id:'gemModels'},['gemini-2.5-flash','gemini-2.5-pro','gemini-2.5-flash-lite'].map(v=>el('option',{value:v})))
+    el('datalist',{id:'gemModels'},['gemini-3.8-flash'].map(v=>el('option',{value:v})))
   ]);
   const sys=el('textarea',{class:'chat-field',rows:'5'});sys.value=store.get(K_CSYS)||CHAT_SYS_DEFAULT;
   const msg=el('div',{class:'status',role:'status'});
