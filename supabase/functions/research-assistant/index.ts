@@ -14,6 +14,7 @@
 //   GEMINI_API_KEY         مفتاح Google AI Studio — لازم لاستعمال Gemini (المحادثة + أزرار شرح/بحث/بحث عميق في القوارئ)
 //   GEMINI_MODEL           اختياري: نموذج Gemini الافتراضي (الأصل gemini-3.8-flash)
 //   GEMINI_DEEP_MODEL      اختياري: نموذج مستقل للبحث العميق (الأصل = GEMINI_MODEL)
+//   GEMINI_FALLBACK_MODEL  اختياري: نموذج احتياطي يُجرَّب إذا انشغلت Google أو تأخّرت (الأصل gemini-2.5-flash)
 //
 // مهم: عند نشر الدالة عطّل خيار «Verify JWT» لهذه الدالة، فالحماية هنا بكلمة المرور أعلاه.
 // بدون كلمة المرور لا يستطيع أحد استعمال رصيدك حتى لو عرف عنوان الدالة.
@@ -81,34 +82,39 @@ function errText(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
 }
 
+// headerMs > 0: مهلة لوصول بداية الرد فقط (لا تقطع البثّ بعد أن يبدأ).
+// سبب وجودها: إن علّق Gemini دون ردّ تقطع Supabase الدالة عند 150 ثانية (الخطأ 546) بلا رسالة مفهومة.
 async function gemFetch(
   model: string,
   method: "generateContent" | "streamGenerateContent",
   payload: unknown,
   key: string,
   signal?: AbortSignal,
+  headerMs = 0,
 ): Promise<Response> {
   const url = GEM_BASE + encodeURIComponent(model) + ":" + method +
     (method === "streamGenerateContent" ? "?alt=sse" : "");
-  return await fetch(url, {
-    method: "POST",
-    headers: { "content-type": "application/json", "x-goog-api-key": key },
-    body: JSON.stringify(payload),
-    signal,
-  });
+  const ctl = new AbortController();
+  if (signal) {
+    if (signal.aborted) ctl.abort();
+    else signal.addEventListener("abort", () => ctl.abort(), { once: true });
+  }
+  const timer = headerMs > 0 ? setTimeout(() => ctl.abort(), headerMs) : 0;
+  try {
+    return await fetch(url, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-goog-api-key": key },
+      body: JSON.stringify(payload),
+      signal: ctl.signal,
+    });
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
 }
 
-// خطأ من Google بصيغة تفهمها واجهة القوارئ (حقل error نصّي)
-async function upstreamError(res: Response): Promise<Response> {
-  let m = "";
-  try {
-    const j = await res.json();
-    m = (j && j.error && j.error.message) || "";
-  } catch { /* ignore */ }
-  // 401/403 من Google لا نمرّرهما كما هما كي لا تُفهم كخطأ في كلمة مرور المساعد
-  const status = res.status === 401 || res.status === 403 ? 502 : (res.status >= 400 ? res.status : 502);
-  return json({ error: gemErrMsg(res.status, m) + (m ? "\n" + m : "") }, status);
-}
+const RETRYABLE = (st: number) => st === 429 || st === 500 || st === 502 || st === 503 || st === 504;
+const GEM_FALLBACK = "gemini-2.5-flash";
+const headerMs = () => Number(Deno.env.get("GEMINI_HEADER_MS")) || 25_000;
 
 // يقرأ أحداث SSE من Gemini ويعيد كل حدث JSON
 async function* gemEvents(body: ReadableStream<Uint8Array>): AsyncGenerator<any> {
@@ -281,36 +287,68 @@ async function runSingle(
   };
   if (mode === "search") payload.tools = [{ googleSearch: {} }];
 
-  let up: Response;
-  try {
-    up = await gemFetch(model, "streamGenerateContent", payload, key);
-  } catch {
-    return json({ error: "تعذّر الوصول إلى Gemini من الدالة." }, 502);
-  }
-  if (!up.ok || !up.body) return await upstreamError(up);
+  // محاولتان بالنموذج المطلوب ثم نموذج احتياطي؛ كل محاولة بمهلة لبداية الرد (الأسوأ ≈ 75 ثانية < حد 150)
+  const fb = Deno.env.get("GEMINI_FALLBACK_MODEL") || GEM_FALLBACK;
+  const plan: string[] = [model, model];
+  if (fb && fb !== model) plan.push(fb);
 
-  const body = up.body;
-  return sseResponse(async (send) => {
-    const sources = new Map<string, Src>();
-    let got = false;
-    let finish = "";
-    for await (const ev of gemEvents(body)) {
-      const br = blockReason(ev);
-      if (br) throw new Error("حجبت Google الطلب لأسباب تتعلق بالسلامة (" + br + ") — أعد صياغة السؤال.");
-      const t = evText(ev);
-      if (t) {
-        got = true;
-        send({ t: "delta", m: t });
+  return sseResponse(async (send, signal) => {
+    let primaryErr = "";
+    for (let i = 0; i < plan.length; i++) {
+      if (signal.aborted) return;
+      if (i > 0) send({ t: "status", m: i === 2 ? "🔁 أجرّب نموذجاً احتياطياً…" : "🔁 أعيد المحاولة…" });
+
+      let up: Response;
+      try {
+        up = await gemFetch(plan[i], "streamGenerateContent", payload, key, signal, headerMs());
+      } catch {
+        if (signal.aborted) return;
+        if (i < 2) primaryErr = "تأخّر Gemini في الاستجابة (ضغط على الخدمة) — أعد المحاولة بعد قليل.";
+        if (i < plan.length - 1) {
+          await sleep(1000);
+          continue;
+        }
+        throw new Error(primaryErr || "تأخّر Gemini في الاستجابة — أعد المحاولة بعد قليل.");
       }
-      collectSources(ev, sources);
-      const fr = ev?.candidates?.[0]?.finishReason;
-      if (fr) finish = String(fr);
+
+      if (!up.ok || !up.body) {
+        let m = "";
+        try {
+          const j = await up.json();
+          m = (j && j.error && j.error.message) || "";
+        } catch { /* ignore */ }
+        const msg = gemErrMsg(up.status, m) + (m ? "\n" + m : "");
+        if (i < 2) primaryErr = msg;
+        if (RETRYABLE(up.status) && i < plan.length - 1) {
+          await sleep(1500);
+          continue;
+        }
+        // النموذج الاحتياطي غير موجود (404): الخطأ المفيد هو خطأ النموذج الأصلي لا هذا
+        throw new Error(i === 2 && up.status === 404 && primaryErr ? primaryErr : msg);
+      }
+
+      const sources = new Map<string, Src>();
+      let got = false;
+      let finish = "";
+      for await (const ev of gemEvents(up.body)) {
+        const br = blockReason(ev);
+        if (br) throw new Error("حجبت Google الطلب لأسباب تتعلق بالسلامة (" + br + ") — أعد صياغة السؤال.");
+        const t = evText(ev);
+        if (t) {
+          got = true;
+          send({ t: "delta", m: t });
+        }
+        collectSources(ev, sources);
+        const fr = ev?.candidates?.[0]?.finishReason;
+        if (fr) finish = String(fr);
+      }
+      if (!got && finish && finish !== "STOP" && finish !== "MAX_TOKENS") {
+        throw new Error("لم يُنتج Gemini ردّاً (" + finish + ") — أعد صياغة السؤال.");
+      }
+      if (finish === "MAX_TOKENS") send({ t: "delta", m: "\n\n(انقطع الرد لبلوغ الحد الأقصى للطول.)" });
+      if (sources.size) send({ t: "sources", m: [...sources.values()] });
+      return;
     }
-    if (!got && finish && finish !== "STOP" && finish !== "MAX_TOKENS") {
-      throw new Error("لم يُنتج Gemini ردّاً (" + finish + ") — أعد صياغة السؤال.");
-    }
-    if (finish === "MAX_TOKENS") send({ t: "delta", m: "\n\n(انقطع الرد لبلوغ الحد الأقصى للطول.)" });
-    if (sources.size) send({ t: "sources", m: [...sources.values()] });
   });
 }
 
@@ -413,7 +451,7 @@ async function runDeep(s: Subject, model: string, key: string): Promise<Response
         subject + "\n\n===== الملاحظات المجمّعة =====\n" + notesTxt + "\n\n===== قائمة المصادر =====\n" + srcTxt,
       ),
       generationConfig: { maxOutputTokens: 6144, temperature: 0.3 },
-    }, key, signal);
+    }, key, signal, 40_000);
     if (!res.ok || !res.body) {
       let m = "";
       try {
@@ -465,9 +503,9 @@ async function handleGemini(body: Record<string, unknown>): Promise<Response> {
     const model = gemModel(body.model, false);
     let up: Response;
     try {
-      up = await gemFetch(model, "streamGenerateContent", payload, key);
+      up = await gemFetch(model, "streamGenerateContent", payload, key, undefined, 40_000);
     } catch {
-      return json({ error: "تعذّر الوصول إلى Gemini من الدالة." }, 502);
+      return json({ error: "تأخّر Gemini في الاستجابة أو تعذّر الوصول إليه — أعد المحاولة بعد قليل." }, 504);
     }
     // نمرّر الرد كما هو (بثّ SSE عند النجاح، أو JSON الخطأ كما أرسلته Google)
     return new Response(up.body, {
