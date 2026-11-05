@@ -7,7 +7,9 @@
 //   XAI_MODEL              اختياري: اسم نموذج Grok الافتراضي (مثلاً grok-4)
 //   OPENROUTER_API_KEY     مفتاح OpenRouter (يبدأ بـ sk-or-) — لازم فقط للنماذج المفتوحة (DeepSeek وKimi وQwen وLlama…)
 //   OPENROUTER_MODEL       اختياري: النموذج الافتراضي (الأصل openrouter/free = يختار نموذجاً مجانياً متاحاً)
-//   OPENROUTER_ALLOW_PAID  اختياري: اجعله 1 للسماح بنماذج مدفوعة. الأصل: المسموح فقط وسم :free أو openrouter/free،
+//   OPENROUTER_PAID_PREFIXES اختياري: مزوّدون مدفوعون مسموحون فقط، مفصولون بفاصلة وينتهي كل منهم بـ /
+//                          مثل: deepseek/,moonshotai/  (أنصح به بدل ALLOW_PAID)
+//   OPENROUTER_ALLOW_PAID  اختياري: اجعله 1 للسماح بكل النماذج المدفوعة. الأصل: المسموح فقط وسم :free أو openrouter/free،
 //                          فلا يستطيع أحد استهلاك رصيدك حتى لو وضعت فيه مالاً.
 //
 // مهم: عند نشر الدالة عطّل خيار «Verify JWT» لهذه الدالة، فالحماية هنا بكلمة المرور أعلاه.
@@ -88,14 +90,18 @@ Deno.serve(async (req: Request): Promise<Response> => {
     apiKey = Deno.env.get("OPENROUTER_API_KEY") ?? "";
     if (!apiKey) return json({ error: "السر OPENROUTER_API_KEY غير مضبوط في أسرار الدالة." }, 500);
     const allowPaid = Deno.env.get("OPENROUTER_ALLOW_PAID") === "1";
+    // إذن انتقائي: مزوّدون محددون فقط (مثل deepseek/,moonshotai/) — أأمن من فتح كل المدفوع
+    const paidPrefixes = (Deno.env.get("OPENROUTER_PAID_PREFIXES") ?? "")
+      .split(",").map((s) => s.trim().toLowerCase()).filter((s) => /^[a-z0-9._-]{1,40}\/$/.test(s));
     const fallback = Deno.env.get("OPENROUTER_MODEL") || "openrouter/free";
     // صيغة المعرّف: مزوّد/نموذج أو مزوّد/نموذج:وسم — مثل deepseek/deepseek-chat:free
     const okShape = /^[A-Za-z0-9._-]{1,40}\/[A-Za-z0-9._-]{1,80}(:[A-Za-z0-9._-]{1,20})?$/.test(wanted);
     model = okShape ? wanted : fallback;
-    if (!allowPaid && model !== "openrouter/free" && !model.endsWith(":free")) {
+    const prefixOk = paidPrefixes.some((p) => model.toLowerCase().startsWith(p));
+    if (!allowPaid && !prefixOk && model !== "openrouter/free" && !model.endsWith(":free")) {
       return json({
-        error: "هذا النموذج غير مجاني. المسموح فقط ما ينتهي بـ :free أو openrouter/free " +
-          "(لإباحة المدفوع اضبط السر OPENROUTER_ALLOW_PAID=1).",
+        error: "هذا النموذج غير مجاني وغير مسموح به في الدالة. المسموح: ما ينتهي بـ :free أو openrouter/free، " +
+          "أو مزوّدون تحددهم في السر OPENROUTER_PAID_PREFIXES (مثل deepseek/,moonshotai/).",
       }, 403);
     }
     endpoint = "https://openrouter.ai/api/v1/chat/completions";
