@@ -435,7 +435,7 @@ const CHAT_MODELS=[
 const K_CPROV='readers_chat_provider',K_GURL='readers_grok_url',K_GPASS='readers_grok_pass',K_GMODEL='readers_grok_model';
 // النماذج المفتوحة (DeepSeek وKimi وQwen وLlama…) عبر OpenRouter: تمرّ بنفس دالة Supabase وكلمة المرور نفسها كـ Grok
 const K_OMODEL='readers_open_model',OPEN_DEFAULT='openrouter/free';
-const OPEN_SUGGEST=['openrouter/free','qwen/qwen3-coder:free','meta-llama/llama-3.3-70b-instruct:free'];
+const OPEN_SUGGEST=['openrouter/free','google/gemma-4-31b-it:free','google/gemma-4-26b-a4b-it:free'];
 const noToolModels=new Set(); // نماذج رفضت الأدوات في هذه الجلسة: نرسل إليها بلا أدوات مباشرة
 // يحجب كتل <think>…</think> التي تُخرجها نماذج التفكير (DeepSeek R1 وغيره) من البث، مع معالجة الوسم المقسوم بين دفعتين
 function thinkFilter(emit){
@@ -477,7 +477,8 @@ function configuredModel(){
 }
 // قائمة النماذج الحيّة من OpenRouter (واجهة عامة بلا مفتاح): مجانية (:free) + مدفوعة رخيصة من مزوّدين محددين (DeepSeek وKimi).
 // عند الفشل نبقى على القائمة الاحتياطية.
-const PAID_PROVIDERS=['deepseek/','moonshotai/'];
+const PAID_PROVIDERS=['deepseek/','moonshotai/','qwen/'];
+const NOT_CHAT=/coder|[-/]vl|vl[-.]|embed|rerank|image|audio|omni|tts|guard|safety/i; // نستبعد المتخصصة (برمجة/رؤية/تضمين) من المجموعة المدفوعة
 let openModelsCache=null;
 const fallbackModels=()=>({free:OPEN_SUGGEST.filter(v=>v!==OPEN_DEFAULT).map(id=>({id,tools:null})),paid:[]});
 async function loadFreeModels(){
@@ -495,10 +496,10 @@ async function loadFreeModels(){
     // الأحدث أولاً، وحتى 4 نماذج لكل مزوّد، وبأسعار معروفة فقط
     const paid=[];
     PAID_PROVIDERS.forEach(pre=>{
-      all.filter(m=>m.id.startsWith(pre)&&!m.id.endsWith(':free')&&isFinite(m.pin)&&isFinite(m.pout)&&m.pin>0)
+      all.filter(m=>m.id.startsWith(pre)&&!NOT_CHAT.test(m.id)&&!m.id.endsWith(':free')&&isFinite(m.pin)&&isFinite(m.pout)&&m.pin>0)
         .sort((a,b)=>b.created-a.created).slice(0,4).forEach(m=>paid.push(m));
     });
-    if(free.length||paid.length)openModelsCache={free,paid};
+    if(free.length||paid.length)openModelsCache={free,paid,live:true};
   }catch{}
   return openModelsCache||fallbackModels();
 }
@@ -894,8 +895,8 @@ function openChat(){
       const tl=m=>m.tools===true?'  ✓ أدوات':m.tools===false?'  — بلا أدوات':'';
       grp('مجانية',data.free,m=>m.id+tl(m));
       const usd=n=>'$'+(n<10?n.toFixed(2):n.toFixed(1));
-      grp('DeepSeek وKimi — مدفوعة (سعر المليون: مدخلات/مخرجات)',data.paid,m=>m.id+'  💲'+usd(m.pin)+'/'+usd(m.pout)+tl(m));
-      if(cur&&!ids.has(cur))pick.appendChild(el('option',{value:cur,text:cur}));
+      grp('DeepSeek وKimi وQwen — مدفوعة (سعر المليون: مدخلات/مخرجات)',data.paid,m=>m.id+'  💲'+usd(m.pin)+'/'+usd(m.pout)+tl(m));
+      if(cur&&!ids.has(cur))pick.appendChild(el('option',{value:cur,text:cur+(data.live?'  ⚠ غير متاح الآن (قد يفشل)':'')}));
       pick.value=cur;
     };
     fill(openModelsCache||fallbackModels());
@@ -928,7 +929,7 @@ function openChatSettings(first){
   const omodel=el('input',{type:'text',class:'chat-field',dir:'ltr',autocomplete:'off',spellcheck:'false',list:'openModels',placeholder:OPEN_DEFAULT,value:ocur});
   const openBox=el('div',{},[
     el('p',{text:'تعمل عبر دالة Supabase نفسها التي يستعملها Grok، فيبقى مفتاح OpenRouter سراً (السر OPENROUTER_API_KEY) وتُدخل هنا عنوان الدالة وكلمة المرور نفسيهما أدناه. افتراضياً لا يُسمح إلا بالنماذج المجانية (الوسم :free أو openrouter/free).'}),
-    el('p',{text:'القيمة openrouter/free تختار تلقائياً نموذجاً مجانياً متاحاً. المجانية محدودة بطلبات في الدقيقة واليوم، وقد تتغير قائمتها؛ راجع openrouter.ai/models ثم اكتب المعرّف هنا. DeepSeek وKimi مدفوعان حالياً (يظهران في قائمة المحادثة مع سعرهما)؛ لاستعمالهما اشحن رصيداً في OpenRouter واضبط السر OPENROUTER_PAID_PREFIXES=deepseek/,moonshotai/ في الدالة.'}),
+    el('p',{text:'القيمة openrouter/free تختار تلقائياً نموذجاً مجانياً متاحاً. المجانية محدودة بطلبات في الدقيقة واليوم، وقد تتغير قائمتها؛ راجع openrouter.ai/models ثم اكتب المعرّف هنا. DeepSeek وKimi وQwen مدفوعة حالياً (تظهر في قائمة المحادثة مع سعرها)؛ لاستعمالهما اشحن رصيداً في OpenRouter واضبط السر OPENROUTER_PAID_PREFIXES=deepseek/,moonshotai/,qwen/ في الدالة.'}),
     el('p',{text:'ليست كل النماذج المجانية تدعم أدوات البحث في نصوص القوارئ؛ إن لم يدعمها النموذج فسيجيب بلا بحث في النصوص. وتُخفى كتل التفكير <think> تلقائياً.'}),
     el('label',{text:'اسم النموذج (اختياري)'}),omodel,
     el('datalist',{id:'openModels'},OPEN_SUGGEST.map(v=>el('option',{value:v})))
