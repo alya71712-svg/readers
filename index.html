@@ -132,6 +132,8 @@ body.panel-hidden .panel-toggle{position:fixed;right:0;top:50%;transform:transla
 .chat-send{padding:11px 18px;white-space:nowrap}
 .chat-send.stop{background:#b91c1c}
 .chat-note{font-size:11px;color:var(--muted);text-align:center}
+.model-tag{align-self:flex-start;text-align:start;direction:ltr;unicode-bidi:isolate;margin:-4px 6px 4px;word-break:break-all}
+.chat-pick{flex:1 1 100%;padding:8px 10px;font-size:13px;direction:ltr;text-align:left}
 .chat-status{font-size:13px;color:var(--accent);text-align:start;padding:0 4px}
 .chat-status:empty{display:none}
 .exp-chk{display:flex;align-items:center;gap:8px;margin:5px 0;font-size:14px;font-weight:400}
@@ -468,6 +470,27 @@ function loadChat(){
   catch{chatHist=[]}
 }
 function saveChat(){chatHist=chatHist.slice(-CHAT_MAX_KEEP);store.set(K_CHIST,JSON.stringify(chatHist))}
+// اسم النموذج المضبوط حالياً للمزوّد (يُستعمل إن لم يُرجع الخادم اسم النموذج الفعلي)
+function configuredModel(){
+  const p=store.get(K_CPROV);
+  return p==='open'?(store.get(K_OMODEL)||OPEN_DEFAULT):p==='grok'?(store.get(K_GMODEL)||'grok-4'):p==='gemini'?(store.get(K_GEMMODEL)||GEM_DEFAULT):(store.get(K_CMODEL)||CHAT_MODELS[0].id);
+}
+// قائمة النماذج المجانية الحيّة من OpenRouter (واجهة عامة بلا مفتاح). عند الفشل نبقى على القائمة الاحتياطية.
+let openModelsCache=null;
+async function loadFreeModels(){
+  if(openModelsCache)return openModelsCache;
+  try{
+    const ctl=new AbortController(),t=setTimeout(()=>ctl.abort(),8000);
+    const res=await fetch('https://openrouter.ai/api/v1/models',{signal:ctl.signal});clearTimeout(t);
+    if(!res.ok)throw new Error('http '+res.status);
+    const j=await res.json();
+    const list=(Array.isArray(j.data)?j.data:[]).filter(m=>m&&typeof m.id==='string'&&m.id.endsWith(':free'))
+      .map(m=>({id:m.id,tools:Array.isArray(m.supported_parameters)&&m.supported_parameters.includes('tools')}))
+      .sort((a,b)=>(b.tools-a.tools)||a.id.localeCompare(b.id)).slice(0,80);
+    if(list.length)openModelsCache=list;
+  }catch{}
+  return openModelsCache||OPEN_SUGGEST.filter(v=>v!==OPEN_DEFAULT).map(id=>({id,tools:null}));
+}
 
 // عرض Markdown مبسّط وآمن (بناء عناصر DOM بـ textContent فقط، بلا innerHTML)
 function mdInline(text,parent){
@@ -624,7 +647,7 @@ async function grokCall(messages,onDelta,signal,tools,prov){
       :'رفض الخادم الطلب ('+res.status+').';
     throw new Error(base+(m?'\n'+m:''));
   }
-  let text='',finish=null;const calls=[];
+  let text='',finish=null,usedModel='';const calls=[];
   const emit=d=>{text+=d;onDelta(d)};
   const out=open?thinkFilter(emit):emit; // النماذج المفتوحة قد تُخرج <think>…</think> فنخفيها
   const feed=block=>{
@@ -633,6 +656,7 @@ async function grokCall(messages,onDelta,signal,tools,prov){
       const d=line.slice(5).trim();if(!d||d==='[DONE]')continue;
       let ev;try{ev=JSON.parse(d)}catch{continue}
       if(ev.error)throw new Error(typeof ev.error==='string'?ev.error:(ev.error.message||'خطأ من الخادم أثناء البث.'));
+      if(ev.model&&typeof ev.model==='string')usedModel=ev.model; // النموذج الفعلي الذي أجاب (مهم مع openrouter/free)
       const ch=ev.choices&&ev.choices[0];if(!ch)continue;
       const dl=ch.delta||{};
       if(dl.content)out(dl.content);
@@ -653,7 +677,7 @@ async function grokCall(messages,onDelta,signal,tools,prov){
   }
   if(buf.trim())feed(buf);
   if(out.flush)out.flush();
-  return {text,calls:calls.filter(c=>c&&c.name).map((c,n)=>({id:c.id||('call_'+n),name:c.name,args:c.args})),finish};
+  return {text,calls:calls.filter(c=>c&&c.name).map((c,n)=>({id:c.id||('call_'+n),name:c.name,args:c.args})),finish,model:usedModel};
 }
 
 async function grokTurn(messages,hooks,signal,prov){
@@ -664,6 +688,7 @@ async function grokTurn(messages,hooks,signal,prov){
     for(let step=0;step<CHAT_MAX_STEPS;step++){
       if(step>0)hooks.sep();
       const r=await grokCall(turn,hooks.delta,signal,tools,prov);
+      if(r.model&&hooks.model)hooks.model(r.model);
       if(r.finish==='length')hooks.delta('\n\n(انقطع الرد لبلوغ الحد الأقصى للطول — اطلب «أكمل».)');
       if(!r.calls.length)return;
       turn.push({role:'assistant',content:r.text||null,tool_calls:r.calls.map(c=>({id:c.id,type:'function',function:{name:c.name,arguments:c.args||'{}'}}))});
@@ -774,14 +799,16 @@ function openChat(){
   const scroll=()=>{list.scrollTop=list.scrollHeight};
   const autosize=()=>{ta.style.height='auto';ta.style.height=Math.min(ta.scrollHeight,140)+'px'};
   const setBusy=b=>{sendBtn.textContent=b?'إيقاف':'إرسال';sendBtn.classList.toggle('stop',b)};
-  const addBubble=(role,text)=>{
+  const addBubble=(role,text,model)=>{
     const e=list.querySelector('.chat-empty');if(e)e.remove();
     const b=el('div',{class:'bubble '+role});
     if(role==='assistant')mdRender(text,b);else b.textContent=text;
-    list.appendChild(b);return b;
+    list.appendChild(b);
+    if(role==='assistant'&&model)list.appendChild(el('div',{class:'chat-note model-tag',text:'🤖 '+model}));
+    return b;
   };
   const buildMessages=()=>{
-    const msgs=chatHist.slice(-CHAT_MAX_SEND);
+    const msgs=chatHist.slice(-CHAT_MAX_SEND).map(m=>({role:m.role,content:m.content})); // بلا حقل model: لا يُرسل إلى الخادم
     while(msgs.length&&msgs[0].role!=='user')msgs.shift();
     return msgs;
   };
@@ -794,23 +821,26 @@ function openChat(){
     const out=addBubble('assistant','');out.classList.add('typing');out.textContent='…';
     const st=el('div',{class:'chat-note chat-status',role:'status'});list.insertBefore(st,out);scroll();
     const ac=new AbortController();chatAbort=ac;setBusy(true);
-    let acc='',raf=0;
+    let acc='',raf=0,used='';
     const paint=()=>{raf=0;mdRender(acc,out);scroll()};
+    const tag=()=>{const m=used||configuredModel();out.after(el('div',{class:'chat-note model-tag',text:'🤖 '+m}));return m};
     try{
       await runTurn(buildMessages(),{
         delta:d=>{acc+=d;out.classList.remove('typing');if(!raf)raf=requestAnimationFrame(paint)},
         sep:()=>{if(acc&&!/\n$/.test(acc))acc+='\n\n'},
-        status:t=>{st.textContent=t;scroll()}
+        status:t=>{st.textContent=t;scroll()},
+        model:m=>{used=m}
       },ac.signal);
       if(raf)cancelAnimationFrame(raf);
       if(!acc.trim())throw new Error('وصل رد فارغ — أعد المحاولة.');
-      mdRender(acc,out);scroll();
-      if(epoch===chatEpoch){chatHist.push({role:'assistant',content:acc});saveChat()}
+      mdRender(acc,out);
+      const mname=tag();scroll();
+      if(epoch===chatEpoch){chatHist.push({role:'assistant',content:acc,model:mname});saveChat()}
     }catch(e){
       if(raf)cancelAnimationFrame(raf);
       if(epoch!==chatEpoch)return;
       if(e&&e.name==='AbortError'&&acc.trim()){
-        mdRender(acc,out);chatHist.push({role:'assistant',content:acc});saveChat();
+        mdRender(acc,out);const mname=tag();chatHist.push({role:'assistant',content:acc,model:mname});saveChat();
       }else{
         chatHist.pop();            // نُسقط رسالتك من السجل ونعيدها للمربع لتعيد الإرسال
         out.remove();ta.value=text;autosize();
@@ -837,13 +867,30 @@ function openChat(){
       chatEpoch++;if(chatAbort)chatAbort.abort();chatHist=[];saveChat();openChat();
     }})
   ]);
+  // اختيار النموذج في كل مرة (للنماذج المفتوحة): التغيير يسري على الرسالة التالية فوراً
+  if(store.get(K_CPROV)==='open'){
+    const pick=el('select',{class:'chat-field chat-pick','aria-label':'النموذج'});
+    const fill=models=>{
+      const cur=store.get(K_OMODEL)||'';
+      pick.textContent='';
+      pick.appendChild(el('option',{value:'',text:'🎲 تلقائي — يختار OpenRouter نموذجاً مجانياً'}));
+      const ids=new Set();
+      models.forEach(m=>{ids.add(m.id);pick.appendChild(el('option',{value:m.id,text:m.id+(m.tools===true?'  ✓ أدوات':m.tools===false?'  — بلا أدوات':'')}))});
+      if(cur&&!ids.has(cur))pick.appendChild(el('option',{value:cur,text:cur}));
+      pick.value=cur;
+    };
+    fill(openModelsCache||OPEN_SUGGEST.filter(v=>v!==OPEN_DEFAULT).map(id=>({id,tools:null})));
+    loadFreeModels().then(fill);
+    pick.addEventListener('change',()=>{if(chatAbort){pick.value=store.get(K_OMODEL)||'';return}store.set(K_OMODEL,pick.value)});
+    bar.appendChild(pick);
+  }
   openModal('محادثة مع '+providerName(),el('div',{class:'chat-wrap'},[
     bar,list,
     el('div',{class:'chat-compose'},[ta,sendBtn]),
     el('div',{class:'chat-note',text:'السجل محفوظ على هذا الجهاز فقط. النموذج قد يخطئ — راجع أي اقتباس على المصدر.'})
   ]),el('div'));
   modal.classList.add('chat-modal');
-  if(chatHist.length)chatHist.forEach(m=>addBubble(m.role,m.content));
+  if(chatHist.length)chatHist.forEach(m=>addBubble(m.role,m.content,m.model));
   else list.appendChild(el('div',{class:'chat-empty',text:'اسأل عن أي نص في القوارئ العشر: يبحث في النصوص ويقرأ الفقرات بأرقامها، ويطّلع على تظليلك وملاحظاتك وإشاراتك وموضع توقفك في كل قارئ.'}));
   scroll();
 }
