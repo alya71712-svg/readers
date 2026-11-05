@@ -209,12 +209,30 @@ function buildSettings(){
     if(settingsThen){ var f=settingsThen; settingsThen=null; f(); }
   }});
   var cancel=mk('button',{type:'button',class:'tbtn',text:'إلغاء',onclick:function(){ settingsThen=null; $('rai-set').classList.remove('show'); }});
+  var ping=mk('button',{type:'button',class:'tbtn',text:'🩺 فحص Gemini',style:'width:100%;margin-top:10px;min-height:40px',onclick:function(){
+    var u=els.sUrl.value.trim(), p=els.sPass.value.trim(), m=els.sModel.value.trim();
+    if(!/^https:\/\/\S+$/.test(u)||p.length<16){ els.sMsg.textContent='أدخل الرابط وكلمة المرور أولاً.'; return; }
+    els.sMsg.textContent='⏳ أفحص (قد يستغرق حتى 30 ثانية)…';
+    var h={'content-type':'application/json','x-assistant-pass':p}, k=cfg().key; if(k) h.apikey=k;
+    var b={provider:'gemini',mode:'ping'}; if(/^gemini-/.test(m)) b.model=m;
+    fetch(u,{method:'POST',headers:h,body:JSON.stringify(b)}).then(function(r){ return r.text().then(function(t){ return {s:r.status,t:t}; }); })
+    .then(function(x){
+      var j; try{ j=JSON.parse(x.t); }catch(e){ els.sMsg.textContent='ردّ غير متوقع ('+x.s+'): '+x.t.slice(0,200); return; }
+      if(x.s!==200){ els.sMsg.textContent=(j.error||('خطأ '+x.s)); return; }
+      var L=['النموذج: '+j.model,
+        'الاتصال بـ Google/المفتاح: '+(j.list_status===200?'✓ سليم ('+j.list_ms+'ms)':'✗ '+j.list_status+' '+(j.list_error||'')),
+        'تجربة النموذج: '+(j.test_status===200?'✓ يردّ ('+j.test_ms+'ms)':'✗ '+j.test_status+' '+(j.test_error||''))];
+      if(j.models&&j.models.length) L.push('النماذج المتاحة لمفتاحك: '+j.models.join(' ، '));
+      els.sMsg.style.whiteSpace='pre-wrap'; els.sMsg.style.direction='ltr'; els.sMsg.textContent=L.join('\n');
+    }).catch(function(e){ els.sMsg.textContent='تعذّر الوصول إلى الدالة: '+(e&&e.message||e); });
+  }});
   var box=mk('div',{class:'box'},[
     mk('div',{text:'⚙ إعدادات شريط الذكاء',style:'font-weight:700;font-size:15px'}),
     mk('label',{text:'رابط الدالة'}),els.sUrl,
     mk('label',{text:'كلمة مرور المساعد'}),els.sPass,
     mk('label',{text:'نموذج Gemini (اختياري)'}),els.sModel,
     els.sMsg,
+    ping,
     mk('div',{class:'row'},[save,cancel]),
     mk('div',{class:'hint',text:'تُحفَظ هذه القيم على هذا الجهاز فقط وتُشارَك مع صفحة المحادثة الرئيسية. مفتاح Gemini نفسه يبقى سراً في Supabase.'})
   ]);

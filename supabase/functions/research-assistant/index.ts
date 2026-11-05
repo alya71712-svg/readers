@@ -518,6 +518,42 @@ async function handleGemini(body: Record<string, unknown>): Promise<Response> {
     });
   }
 
+  // فحص: هل يصل الخادم إلى Google وهل المفتاح صالح وما النماذج المتاحة وهل يردّ النموذج المختار
+  if (body.mode === "ping") {
+    const model = gemModel(body.model, false);
+    const out: Record<string, unknown> = { model, fallback: Deno.env.get("GEMINI_FALLBACK_MODEL") || GEM_FALLBACK };
+    const t0 = Date.now();
+    try {
+      const r = await fetch("https://generativelanguage.googleapis.com/v1beta/models?pageSize=200", {
+        headers: { "x-goog-api-key": key },
+        signal: AbortSignal.timeout(10_000),
+      });
+      out.list_status = r.status;
+      out.list_ms = Date.now() - t0;
+      if (r.ok) {
+        const j = await r.json();
+        out.models = (j.models || []).map((m: any) => String(m.name || "").replace("models/", ""))
+          .filter((n: string) => /^gemini-/.test(n) && !/embedding|image|tts|live|audio/.test(n)).slice(0, 40);
+      } else {
+        try { out.list_error = (await r.json())?.error?.message; } catch { /* ignore */ }
+      }
+    } catch (e) {
+      out.list_status = 0;
+      out.list_error = "لا ردّ خلال 10 ثوانٍ: " + errText(e);
+    }
+    const t1 = Date.now();
+    try {
+      const r = await gemFetch(model, "generateContent", { contents: userContent("قل: تم"), generationConfig: { maxOutputTokens: 16 } }, key, undefined, 15_000);
+      out.test_status = r.status;
+      out.test_ms = Date.now() - t1;
+      if (!r.ok) { try { out.test_error = (await r.json())?.error?.message; } catch { /* ignore */ } }
+    } catch (e) {
+      out.test_status = 0;
+      out.test_error = "لا ردّ خلال 15 ثانية: " + errText(e);
+    }
+    return json(out);
+  }
+
   const mode = body.mode;
   if (mode !== "explain" && mode !== "search" && mode !== "deep") {
     return json({ error: "الوضع غير معروف (المسموح: explain أو search أو deep)." }, 400);
