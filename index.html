@@ -634,7 +634,7 @@ async function claudeTurn(messages,hooks,signal){
 
 
 // ---------- Grok (xAI) عبر دالة Supabase تحفظ المفتاح سراً ----------
-function chatReady(){const p=store.get(K_CPROV);return (p==='grok'||p==='open')?!!(store.get(K_GURL)&&store.get(K_GPASS)):p==='gemini'?!!store.get(K_GEMKEY):!!store.get(K_CKEY)}
+function chatReady(){const p=store.get(K_CPROV);return (p==='grok'||p==='open'||p==='gemini')?!!((store.get(K_GURL)||grokDefaultUrl())&&store.get(K_GPASS)):!!store.get(K_CKEY)}
 function providerName(){const p=store.get(K_CPROV);return p==='grok'?'Grok':p==='gemini'?'Gemini':p==='open'?'نموذج مفتوح':'Claude'}
 function grokDefaultUrl(){const u=String((window.READER_CLOUD_CONFIG||{}).url||'').replace(/\/+$/,'');return u?u+'/functions/v1/research-assistant':''}
 
@@ -758,7 +758,7 @@ async function grokTurn(messages,hooks,signal,prov){
   }finally{chatStatusHook=null;chatToolLabel='';hooks.status('')}
 }
 
-// ---------- Gemini (Google) مباشرة من المتصفح بمفتاح على هذا الجهاز ----------
+// ---------- Gemini (Google) عبر دالة Supabase: المفتاح سرّ في الدالة (GEMINI_API_KEY) لا في المتصفح ----------
 // مخطط الأداة لصيغة Gemini: نحذف الحقول غير المدعومة (additionalProperties) ومصفوفات required الفارغة
 function gemSchema(s){
   if(Array.isArray(s))return s.map(gemSchema);
@@ -772,15 +772,18 @@ function gemSchema(s){
   return o;
 }
 async function geminiCall(sysText,contents,onDelta,signal,tools){
-  const key=store.get(K_GEMKEY);let model=(store.get(K_GEMMODEL)||GEM_DEFAULT).trim()||GEM_DEFAULT;if(model===GEM_OLD)model=GEM_DEFAULT;
+  let model=(store.get(K_GEMMODEL)||GEM_DEFAULT).trim()||GEM_DEFAULT;if(model===GEM_OLD)model=GEM_DEFAULT;
   const body={systemInstruction:{parts:[{text:sysText}]},contents,generationConfig:{maxOutputTokens:4096}};
   if(tools)body.tools=[{functionDeclarations:tools.map(t=>({name:t.name,description:t.description,parameters:gemSchema(t.input_schema)}))}];
-  const res=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+encodeURIComponent(model)+':streamGenerateContent?alt=sse',{
-    method:'POST',signal,headers:{'content-type':'application/json','x-goog-api-key':key},body:JSON.stringify(body)
+  const headers={'content-type':'application/json','x-assistant-pass':store.get(K_GPASS)||''};
+  const ck=(window.READER_CLOUD_CONFIG||{}).key;if(ck)headers.apikey=ck;
+  const res=await fetch((store.get(K_GURL)||grokDefaultUrl()).trim(),{
+    method:'POST',signal,headers,body:JSON.stringify({provider:'gemini',model,native:body})
   });
   if(!res.ok){
-    let m='',st='';try{const j=await res.json();m=(j.error&&j.error.message)||'';st=(j.error&&j.error.status)||''}catch{}
-    const base=(res.status===400&&/api key/i.test(m))||res.status===401?'مفتاح Gemini غير صالح — افتح ⚙ الإعدادات وتحقق منه.'
+    let m='',st='',own='';try{const j=await res.json();if(typeof j.error==='string')own=j.error;else{m=(j.error&&j.error.message)||'';st=(j.error&&j.error.status)||''}}catch{}
+    if(own)throw new Error(own); // خطأ من الدالة نفسها (كلمة المرور، سر ناقص…) نصّه واضح
+    const base=(res.status===400&&/api key/i.test(m))||res.status===401?'مفتاح Gemini غير صالح — راجع السر GEMINI_API_KEY في Supabase.'
       :res.status===403?'رفضت Google الطلب (403): قد يكون المفتاح غير مفعّل لهذه الخدمة أو أن بلدك غير مدعوم.'
       :res.status===404?'اسم النموذج غير موجود — عدّله في ⚙ الإعدادات.'
       :res.status===429||st==='RESOURCE_EXHAUSTED'?'استنفدت الحصة المجانية أو تجاوزت حد الطلبات — انتظر قليلاً أو بدّل النموذج.'
@@ -974,7 +977,7 @@ function openChatSettings(first){
   // المجاني أولاً؛ Claude وGrok يتطلبان مفتاحاً مدفوعاً
   const prov=el('select',{class:'chat-field',id:'chatProvSel'},[
     el('option',{value:'open',text:'نماذج مفتوحة: DeepSeek وKimi وQwen وLlama (عبر OpenRouter — مجاني)'}),
-    el('option',{value:'gemini',text:'Gemini (مفتاح Google على هذا الجهاز — طبقة مجانية)'}),
+    el('option',{value:'gemini',text:'Gemini (عبر دالة Supabase — طبقة مجانية، المفتاح سرّ في الدالة)'}),
     el('option',{value:'grok',text:'Grok — يتطلب مفتاح xAI مدفوعاً (عبر دالة Supabase)'}),
     el('option',{value:'claude',text:'Claude — يتطلب مفتاح Anthropic مدفوعاً'})]);
   prov.value=curProv;
@@ -1011,18 +1014,17 @@ function openChatSettings(first){
     el('label',{text:'عنوان الدالة'}),gurl,el('label',{text:'كلمة مرور المساعد'}),gpass
   ]);
   // --- Gemini ---
-  const gemKey=el('input',{type:'password',class:'chat-field',dir:'ltr',autocomplete:'off',spellcheck:'false',placeholder:'AIza…',value:store.get(K_GEMKEY)||''});
   const gemModel=el('input',{type:'text',class:'chat-field',dir:'ltr',autocomplete:'off',spellcheck:'false',list:'gemModels',placeholder:GEM_DEFAULT,value:(store.get(K_GEMMODEL)&&store.get(K_GEMMODEL)!==GEM_OLD)?store.get(K_GEMMODEL):GEM_DEFAULT});
   const gemBox=el('div',{},[
-    el('p',{text:'أنشئ مفتاحاً مجانياً من aistudio.google.com ← Get API key (بلا بطاقة). المفتاح يُحفظ على هذا الجهاز فقط، لا في GitHub ولا في المزامنة.'}),
+    el('p',{text:'مفتاح Gemini (من aistudio.google.com ← Get API key، بلا بطاقة) يبقى سراً داخل دالة Supabase باسم GEMINI_API_KEY، ولا يظهر هنا ولا في GitHub. أدخل عنوان الدالة وكلمة المرور نفسيهما أدناه — وهما نفسهما اللذان يستعملهما شريط شرح/بحث/بحث عميق في القوارئ.'}),
     el('p',{text:'تنبيه خصوصية: في الطبقة المجانية قد تستخدم Google ما ترسله (ومنه نصوص تظليلك وملاحظاتك التي تطلبها الأدوات) لتحسين منتجاتها. الطبقة المدفوعة لا تفعل ذلك. والحصة المجانية محدودة وتتغير شروطها.'}),
-    el('label',{text:'مفتاح Gemini'}),gemKey,el('label',{text:'اسم النموذج'}),gemModel,
+    el('label',{text:'اسم النموذج'}),gemModel,
     el('datalist',{id:'gemModels'},['gemini-3.8-flash'].map(v=>el('option',{value:v})))
   ]);
   const sys=el('textarea',{class:'chat-field',rows:'5'});sys.value=store.get(K_CSYS)||CHAT_SYS_DEFAULT;
   const msg=el('div',{class:'status',role:'status'});
   const sync=()=>{claudeBox.style.display=prov.value==='claude'?'':'none';grokBox.style.display=prov.value==='grok'?'':'none';gemBox.style.display=prov.value==='gemini'?'':'none';
-    openBox.style.display=prov.value==='open'?'':'none';fnBox.style.display=(prov.value==='open'||prov.value==='grok')?'':'none'};
+    openBox.style.display=prov.value==='open'?'':'none';fnBox.style.display=(prov.value==='open'||prov.value==='grok'||prov.value==='gemini')?'':'none'};
   prov.addEventListener('change',sync);sync();
   const body=el('div',{class:'chat-form'},[
     el('p',{text:first?'اختر المزوّد وأدخل بياناته مرة واحدة على هذا الجهاز.':'إعدادات المحادثة'}),
@@ -1032,9 +1034,12 @@ function openChatSettings(first){
       el('button',{type:'button',text:'حفظ',onclick:()=>{
         const s=sys.value.trim();
         if(prov.value==='gemini'){
-          const k=gemKey.value.trim();
-          if(!/^[\x21-\x7E]{20,}$/.test(k)){msg.textContent='مفتاح Gemini غير صالح — ألصقه كما هو من AI Studio (أحرف إنجليزية بلا مسافات).';return}
-          store.set(K_GEMKEY,k);store.set(K_GEMMODEL,gemModel.value.trim()||GEM_DEFAULT);store.set(K_CPROV,'gemini');
+          const u=gurl.value.trim(),pw=gpass.value.trim(),gm=gemModel.value.trim();
+          if(!/^https:\/\/[^\s]+$/.test(u)){msg.textContent='عنوان الدالة يجب أن يبدأ بـ https://';return}
+          if(pw.length<16){msg.textContent='كلمة المرور قصيرة — يجب أن تطابق السر ASSISTANT_PASSPHRASE (16 حرفاً فأكثر).';return}
+          if(gm&&!/^gemini-[A-Za-z0-9._-]{1,48}$/.test(gm)){msg.textContent='اسم النموذج يجب أن يبدأ بـ gemini-';return}
+          store.set(K_GURL,u);store.set(K_GPASS,pw);store.set(K_GEMMODEL,gm||GEM_DEFAULT);store.set(K_CPROV,'gemini');
+          try{localStorage.removeItem(K_GEMKEY)}catch{} // نُنهي حفظ المفتاح القديم على هذا الجهاز بعد النقل إلى الدالة
         }else if(prov.value==='open'){
           const u=gurl.value.trim(),pw=gpass.value.trim(),om=omodel.value.trim();
           if(!/^https:\/\/[^\s]+$/.test(u)){msg.textContent='عنوان الدالة يجب أن يبدأ بـ https://';return}
@@ -1061,8 +1066,8 @@ function openChatSettings(first){
       el('button',{type:'button',class:'secondary',text:'حذف كلمة مرور المساعد من هذا الجهاز',onclick:()=>{
         if(confirm('ستُحذف كلمة المرور من هذا الجهاز. متابعة؟')){try{localStorage.removeItem(K_GPASS)}catch{}gpass.value='';msg.textContent='✓ حُذفت كلمة المرور.'}
       }}),
-      el('button',{type:'button',class:'secondary',text:'حذف مفتاح Gemini من هذا الجهاز',onclick:()=>{
-        if(confirm('سيُحذف مفتاح Gemini من هذا الجهاز. متابعة؟')){try{localStorage.removeItem(K_GEMKEY)}catch{}gemKey.value='';msg.textContent='✓ حُذف المفتاح.'}
+      el('button',{type:'button',class:'secondary',text:'حذف مفتاح Gemini القديم من هذا الجهاز',onclick:()=>{
+        if(confirm('سيُحذف مفتاح Gemini المحفوظ سابقاً على هذا الجهاز (لم يعد مطلوباً بعد النقل إلى الدالة). متابعة؟')){try{localStorage.removeItem(K_GEMKEY)}catch{}msg.textContent='✓ حُذف المفتاح القديم.'}
       }}),
       !first&&el('button',{type:'button',class:'ghost',text:'رجوع للمحادثة',onclick:()=>{if(chatReady())openChat();else closeModal()}})
     ]),
