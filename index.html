@@ -480,7 +480,14 @@ function configuredModel(){
 const PAID_PROVIDERS=['deepseek/','moonshotai/','qwen/'];
 const NOT_CHAT=/coder|[-/]vl|vl[-.]|embed|rerank|image|audio|omni|tts|guard|safety/i; // نستبعد المتخصصة (برمجة/رؤية/تضمين) من المجموعة المدفوعة
 let openModelsCache=null;
-const fallbackModels=()=>({free:OPEN_SUGGEST.filter(v=>v!==OPEN_DEFAULT).map(id=>({id,tools:null})),paid:[]});
+// استبعاد ما لا يصلح للأسئلة على النصوص: بلا أدوات، أو أقل من 12 مليار معامل، أو مصنِّفات أمان/برمجة/تضمين
+const WEAK_NAME=/safety|guard|code|coder|embed|rerank|tts/i;
+function isWeakModel(m){
+  if(m.tools===false||WEAK_NAME.test(m.id))return true;
+  const sz=m.id.match(/(?:^|[-_/.])(\d+(?:\.\d+)?)b(?=[-_.:]|$)/i); // أول رقم قبل b = الحجم الكلي (لا النشط a4b)
+  return !!sz&&parseFloat(sz[1])<12;
+}
+const fallbackModels=()=>({freeAll:[],free:OPEN_SUGGEST.filter(v=>v!==OPEN_DEFAULT).map(id=>({id,tools:null})),paid:[]});
 async function loadFreeModels(){
   if(openModelsCache)return openModelsCache;
   try{
@@ -492,14 +499,15 @@ async function loadFreeModels(){
       id:m.id,created:Number(m.created)||0,
       tools:Array.isArray(m.supported_parameters)&&m.supported_parameters.includes('tools'),
       pin:Number(m.pricing&&m.pricing.prompt)*1e6,pout:Number(m.pricing&&m.pricing.completion)*1e6}));
-    const free=all.filter(m=>m.id.endsWith(':free')).sort((a,b)=>(b.tools-a.tools)||a.id.localeCompare(b.id)).slice(0,80);
+    const freeAll=all.filter(m=>m.id.endsWith(':free')).sort((a,b)=>(b.tools-a.tools)||a.id.localeCompare(b.id)).slice(0,80);
+    const free=freeAll.filter(m=>!isWeakModel(m));
     // الأحدث أولاً، وحتى 4 نماذج لكل مزوّد، وبأسعار معروفة فقط
     const paid=[];
     PAID_PROVIDERS.forEach(pre=>{
       all.filter(m=>m.id.startsWith(pre)&&!NOT_CHAT.test(m.id)&&!m.id.endsWith(':free')&&isFinite(m.pin)&&isFinite(m.pout)&&m.pin>0)
         .sort((a,b)=>b.created-a.created).slice(0,4).forEach(m=>paid.push(m));
     });
-    if(free.length||paid.length)openModelsCache={free,paid,live:true};
+    if(free.length||paid.length)openModelsCache={free,freeAll,paid,live:true};
   }catch{}
   return openModelsCache||fallbackModels();
 }
@@ -915,6 +923,7 @@ function openChat(){
   // اختيار النموذج في كل مرة (للنماذج المفتوحة): التغيير يسري على الرسالة التالية فوراً
   if(store.get(K_CPROV)==='open'){
     const pick=el('select',{class:'chat-field chat-pick','aria-label':'النموذج'});
+    let showAll=false;
     const fill=data=>{
       const cur=store.get(K_OMODEL)||'';
       pick.textContent='';
@@ -927,15 +936,25 @@ function openChat(){
         pick.appendChild(g);
       };
       const tl=m=>m.tools===true?'  ✓ أدوات':m.tools===false?'  — بلا أدوات':'';
-      grp('مجانية',data.free,m=>m.id+tl(m));
+      const hidden=(data.freeAll||[]).length-data.free.length;
+      grp(showAll?'مجانية (كلها)':'مجانية',showAll?data.freeAll:data.free,m=>m.id+tl(m)+(showAll&&isWeakModel(m)?'  ✗ ضعيف':''));
       const usd=n=>'$'+(n<10?n.toFixed(2):n.toFixed(1));
       grp('DeepSeek وKimi وQwen — مدفوعة (سعر المليون: مدخلات/مخرجات)',data.paid,m=>m.id+'  💲'+usd(m.pin)+'/'+usd(m.pout)+tl(m));
-      if(cur&&!ids.has(cur))pick.appendChild(el('option',{value:cur,text:cur+(data.live?'  ⚠ غير متاح الآن (قد يفشل)':'')}));
+      if(cur&&!ids.has(cur)){
+        const known=(data.freeAll||[]).some(m=>m.id===cur); // موجود لكنه مستبعد كضعيف
+        pick.appendChild(el('option',{value:cur,text:cur+(known?'  ✗ مستبعد (ضعيف)':data.live?'  ⚠ غير متاح الآن (قد يفشل)':'')}));
+      }
+      if(!showAll&&hidden>0)pick.appendChild(el('option',{value:'__all__',text:'⋯ إظهار '+hidden+' نموذجاً مستبعداً (ضعيف أو بلا أدوات)'}));
       pick.value=cur;
+      pick._data=data;
     };
     fill(openModelsCache||fallbackModels());
     loadFreeModels().then(fill);
-    pick.addEventListener('change',()=>{if(chatAbort){pick.value=store.get(K_OMODEL)||'';return}store.set(K_OMODEL,pick.value)});
+    pick.addEventListener('change',()=>{
+      if(pick.value==='__all__'){showAll=true;fill(pick._data);return}
+      if(chatAbort){pick.value=store.get(K_OMODEL)||'';return}
+      store.set(K_OMODEL,pick.value);
+    });
     bar.appendChild(pick);
   }
   openModal('محادثة مع '+providerName(),el('div',{class:'chat-wrap'},[
