@@ -475,8 +475,11 @@ function configuredModel(){
   const p=store.get(K_CPROV);
   return p==='open'?(store.get(K_OMODEL)||OPEN_DEFAULT):p==='grok'?(store.get(K_GMODEL)||'grok-4'):p==='gemini'?(store.get(K_GEMMODEL)||GEM_DEFAULT):(store.get(K_CMODEL)||CHAT_MODELS[0].id);
 }
-// قائمة النماذج المجانية الحيّة من OpenRouter (واجهة عامة بلا مفتاح). عند الفشل نبقى على القائمة الاحتياطية.
+// قائمة النماذج الحيّة من OpenRouter (واجهة عامة بلا مفتاح): مجانية (:free) + مدفوعة رخيصة من مزوّدين محددين (DeepSeek وKimi).
+// عند الفشل نبقى على القائمة الاحتياطية.
+const PAID_PROVIDERS=['deepseek/','moonshotai/'];
 let openModelsCache=null;
+const fallbackModels=()=>({free:OPEN_SUGGEST.filter(v=>v!==OPEN_DEFAULT).map(id=>({id,tools:null})),paid:[]});
 async function loadFreeModels(){
   if(openModelsCache)return openModelsCache;
   try{
@@ -484,14 +487,21 @@ async function loadFreeModels(){
     const res=await fetch('https://openrouter.ai/api/v1/models',{signal:ctl.signal});clearTimeout(t);
     if(!res.ok)throw new Error('http '+res.status);
     const j=await res.json();
-    const list=(Array.isArray(j.data)?j.data:[]).filter(m=>m&&typeof m.id==='string'&&m.id.endsWith(':free'))
-      .map(m=>({id:m.id,tools:Array.isArray(m.supported_parameters)&&m.supported_parameters.includes('tools')}))
-      .sort((a,b)=>(b.tools-a.tools)||a.id.localeCompare(b.id)).slice(0,80);
-    if(list.length)openModelsCache=list;
+    const all=(Array.isArray(j.data)?j.data:[]).filter(m=>m&&typeof m.id==='string').map(m=>({
+      id:m.id,created:Number(m.created)||0,
+      tools:Array.isArray(m.supported_parameters)&&m.supported_parameters.includes('tools'),
+      pin:Number(m.pricing&&m.pricing.prompt)*1e6,pout:Number(m.pricing&&m.pricing.completion)*1e6}));
+    const free=all.filter(m=>m.id.endsWith(':free')).sort((a,b)=>(b.tools-a.tools)||a.id.localeCompare(b.id)).slice(0,80);
+    // الأحدث أولاً، وحتى 4 نماذج لكل مزوّد، وبأسعار معروفة فقط
+    const paid=[];
+    PAID_PROVIDERS.forEach(pre=>{
+      all.filter(m=>m.id.startsWith(pre)&&!m.id.endsWith(':free')&&isFinite(m.pin)&&isFinite(m.pout)&&m.pin>0)
+        .sort((a,b)=>b.created-a.created).slice(0,4).forEach(m=>paid.push(m));
+    });
+    if(free.length||paid.length)openModelsCache={free,paid};
   }catch{}
-  return openModelsCache||OPEN_SUGGEST.filter(v=>v!==OPEN_DEFAULT).map(id=>({id,tools:null}));
+  return openModelsCache||fallbackModels();
 }
-
 // عرض Markdown مبسّط وآمن (بناء عناصر DOM بـ textContent فقط، بلا innerHTML)
 function mdInline(text,parent){
   const re=/(\*\*[^*]+\*\*|`[^`]+`|\*[^*\n]+\*)/g;let last=0,m;
@@ -870,16 +880,25 @@ function openChat(){
   // اختيار النموذج في كل مرة (للنماذج المفتوحة): التغيير يسري على الرسالة التالية فوراً
   if(store.get(K_CPROV)==='open'){
     const pick=el('select',{class:'chat-field chat-pick','aria-label':'النموذج'});
-    const fill=models=>{
+    const fill=data=>{
       const cur=store.get(K_OMODEL)||'';
       pick.textContent='';
       pick.appendChild(el('option',{value:'',text:'🎲 تلقائي — يختار OpenRouter نموذجاً مجانياً'}));
       const ids=new Set();
-      models.forEach(m=>{ids.add(m.id);pick.appendChild(el('option',{value:m.id,text:m.id+(m.tools===true?'  ✓ أدوات':m.tools===false?'  — بلا أدوات':'')}))});
+      const grp=(label,items,fmt)=>{
+        if(!items.length)return;
+        const g=el('optgroup',{label});
+        items.forEach(m=>{ids.add(m.id);g.appendChild(el('option',{value:m.id,text:fmt(m)}))});
+        pick.appendChild(g);
+      };
+      const tl=m=>m.tools===true?'  ✓ أدوات':m.tools===false?'  — بلا أدوات':'';
+      grp('مجانية',data.free,m=>m.id+tl(m));
+      const usd=n=>'$'+(n<10?n.toFixed(2):n.toFixed(1));
+      grp('DeepSeek وKimi — مدفوعة (سعر المليون: مدخلات/مخرجات)',data.paid,m=>m.id+'  💲'+usd(m.pin)+'/'+usd(m.pout)+tl(m));
       if(cur&&!ids.has(cur))pick.appendChild(el('option',{value:cur,text:cur}));
       pick.value=cur;
     };
-    fill(openModelsCache||OPEN_SUGGEST.filter(v=>v!==OPEN_DEFAULT).map(id=>({id,tools:null})));
+    fill(openModelsCache||fallbackModels());
     loadFreeModels().then(fill);
     pick.addEventListener('change',()=>{if(chatAbort){pick.value=store.get(K_OMODEL)||'';return}store.set(K_OMODEL,pick.value)});
     bar.appendChild(pick);
@@ -909,7 +928,7 @@ function openChatSettings(first){
   const omodel=el('input',{type:'text',class:'chat-field',dir:'ltr',autocomplete:'off',spellcheck:'false',list:'openModels',placeholder:OPEN_DEFAULT,value:ocur});
   const openBox=el('div',{},[
     el('p',{text:'تعمل عبر دالة Supabase نفسها التي يستعملها Grok، فيبقى مفتاح OpenRouter سراً (السر OPENROUTER_API_KEY) وتُدخل هنا عنوان الدالة وكلمة المرور نفسيهما أدناه. افتراضياً لا يُسمح إلا بالنماذج المجانية (الوسم :free أو openrouter/free).'}),
-    el('p',{text:'القيمة openrouter/free تختار تلقائياً نموذجاً مجانياً متاحاً. المجانية محدودة بطلبات في الدقيقة واليوم، وقد تتغير قائمتها؛ راجع openrouter.ai/models ثم اكتب المعرّف هنا. DeepSeek وKimi مدفوعان حالياً بأسعار زهيدة، ولاستعمالهما اضبط السر OPENROUTER_ALLOW_PAID=1 في الدالة.'}),
+    el('p',{text:'القيمة openrouter/free تختار تلقائياً نموذجاً مجانياً متاحاً. المجانية محدودة بطلبات في الدقيقة واليوم، وقد تتغير قائمتها؛ راجع openrouter.ai/models ثم اكتب المعرّف هنا. DeepSeek وKimi مدفوعان حالياً (يظهران في قائمة المحادثة مع سعرهما)؛ لاستعمالهما اشحن رصيداً في OpenRouter واضبط السر OPENROUTER_PAID_PREFIXES=deepseek/,moonshotai/ في الدالة.'}),
     el('p',{text:'ليست كل النماذج المجانية تدعم أدوات البحث في نصوص القوارئ؛ إن لم يدعمها النموذج فسيجيب بلا بحث في النصوص. وتُخفى كتل التفكير <think> تلقائياً.'}),
     el('label',{text:'اسم النموذج (اختياري)'}),omodel,
     el('datalist',{id:'openModels'},OPEN_SUGGEST.map(v=>el('option',{value:v})))
