@@ -630,9 +630,9 @@ function providerName(){const p=store.get(K_CPROV);return p==='grok'?'Grok':p===
 function grokDefaultUrl(){const u=String((window.READER_CLOUD_CONFIG||{}).url||'').replace(/\/+$/,'');return u?u+'/functions/v1/research-assistant':''}
 
 // طلب واحد بصيغة OpenAI-compatible. يعيد {text,calls:[{id,name,args}],finish}
-async function grokCall(messages,onDelta,signal,tools,prov){
+async function grokCall1(messages,onDelta,signal,tools,prov,override){
   const open=prov==='open';
-  const url=(store.get(K_GURL)||'').trim(),model=((open?store.get(K_OMODEL):store.get(K_GMODEL))||'').trim();
+  const url=(store.get(K_GURL)||'').trim(),model=(override||(open?store.get(K_OMODEL):store.get(K_GMODEL))||'').trim();
   if(open&&noToolModels.has(model||OPEN_DEFAULT))tools=null;
   const body={messages,max_tokens:4096};
   if(open)body.provider='openrouter';
@@ -647,16 +647,18 @@ async function grokCall(messages,onDelta,signal,tools,prov){
     if(open&&tools&&[400,404,422].includes(res.status)&&/tool|function/i.test(m)){
       noToolModels.add(model||OPEN_DEFAULT);
       if(chatStatusHook)chatStatusHook('هذا النموذج لا يدعم أدوات البحث في النصوص — سيجيب بلا بحث.');
-      return grokCall(messages,onDelta,signal,null,prov);
+      return grokCall1(messages,onDelta,signal,null,prov,override);
     }
     const who=open?'OpenRouter':'xAI';
     const base=res.status===401?'رُفض الاعتماد (401): كلمة مرور المساعد أو مفتاح '+who+' غير صحيح — راجع ⚙ الإعدادات وأسرار الدالة.'
       :res.status===402?'رصيد '+who+' لا يكفي لهذا النموذج — اختر نموذجاً مجانياً (ينتهي بـ :free) أو اشحن الرصيد.'
       :res.status===404?'الدالة أو النموذج غير موجود — تحقق من نشر الدالة باسم research-assistant ومن العنوان واسم النموذج في الإعدادات.'
-      :res.status===429?(open?'بلغت حد النماذج المجانية (لكل دقيقة أو لليوم) — انتظر قليلاً أو بدّل النموذج.':'تجاوزت حد الطلبات — أعد المحاولة بعد قليل.')
+      :res.status===429?(open?'بلغ النموذج (أو مزوّده) حد الطلبات أو كان مشغولاً (لكل دقيقة أو لليوم في المجاني) — انتظر قليلاً أو بدّل النموذج.':'تجاوزت حد الطلبات — أعد المحاولة بعد قليل.')
       :res.status>=500?'تعذّر إتمام الطلب من جهة الدالة أو '+who+' ('+res.status+').'
       :'رفض الخادم الطلب ('+res.status+').';
-    throw new Error(base+(m?'\n'+m:''));
+    const err=new Error(base+(m?'\n'+m:''));
+    err.model=model||OPEN_DEFAULT;err.retryable=open&&[408,429,502,503,504].includes(res.status); // أعطال مؤقتة يُجرَّب لها نموذج آخر
+    throw err;
   }
   let text='',finish=null,usedModel='';const calls=[];
   const emit=d=>{text+=d;onDelta(d)};
@@ -681,14 +683,46 @@ async function grokCall(messages,onDelta,signal,tools,prov){
     }
   };
   const rd=res.body.getReader(),dec=new TextDecoder();let buf='';
-  for(;;){
-    const {done,value}=await rd.read();if(done)break;
-    buf+=dec.decode(value,{stream:true}).replace(/\r\n/g,'\n');
-    let i;while((i=buf.indexOf('\n\n'))>=0){const block=buf.slice(0,i);buf=buf.slice(i+2);feed(block)}
+  try{
+    for(;;){
+      const {done,value}=await rd.read();if(done)break;
+      buf+=dec.decode(value,{stream:true}).replace(/\r\n/g,'\n');
+      let i;while((i=buf.indexOf('\n\n'))>=0){const block=buf.slice(0,i);buf=buf.slice(i+2);feed(block)}
+    }
+    if(buf.trim())feed(buf);
+  }catch(e){
+    // خطأ في البث قبل وصول أي نص أو أداة: آمن لإعادة المحاولة بنموذج آخر
+    if(open&&e&&e.name!=='AbortError'&&!text&&!calls.length){e.model=model||OPEN_DEFAULT;e.retryable=true}
+    throw e;
   }
-  if(buf.trim())feed(buf);
   if(out.flush)out.flush();
   return {text,calls:calls.filter(c=>c&&c.name).map((c,n)=>({id:c.id||('call_'+n),name:c.name,args:c.args})),finish,model:usedModel};
+}
+
+// نموذج بديل مجاني يدعم الأدوات، يُفضَّل الأقوى للعربية، ويستبعد الصغير والمصنِّفات وما جُرّب
+async function pickFallback(tried){
+  const data=await loadFreeModels();
+  const pref=['google/gemma-4-31b-it:free','google/gemma-4-26b-a4b-it:free','nvidia/nemotron-3-ultra-550b-a55b:free'];
+  const list=data.free.filter(m=>m.tools!==false&&!tried.has(m.id)&&!/lfm|2\.6b|safety|crouton/i.test(m.id));
+  for(const id of pref){if(list.some(m=>m.id===id))return id}
+  return (list.find(m=>m.tools===true)||list[0]||{}).id||null;
+}
+// عند عطل مؤقت (حد/انشغال المزوّد) في وضع النماذج المفتوحة المجانية: نجرّب نموذجاً مجانياً آخر تلقائياً حتى مرتين
+async function grokCall(messages,onDelta,signal,tools,prov){
+  if(prov!=='open')return grokCall1(messages,onDelta,signal,tools,prov);
+  const tried=new Set();let override=null;
+  for(let n=0;;n++){
+    try{return await grokCall1(messages,onDelta,signal,tools,prov,override)}
+    catch(e){
+      const free=e&&e.model&&(e.model===OPEN_DEFAULT||e.model.endsWith(':free'));
+      if(!e||e.name==='AbortError'||!e.retryable||!free||n>=2||(signal&&signal.aborted))throw e;
+      tried.add(e.model);
+      const next=await pickFallback(tried);
+      if(!next)throw e;
+      if(chatStatusHook)chatStatusHook('تعذّر '+(e.model===OPEN_DEFAULT?'النموذج التلقائي':e.model)+' مؤقتاً — أجرّب '+next+'…');
+      override=next;
+    }
+  }
 }
 
 async function grokTurn(messages,hooks,signal,prov){
