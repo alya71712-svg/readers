@@ -1,10 +1,14 @@
-// دالة Supabase Edge: وسيط آمن بين موقع القوارئ العشر وواجهة xAI (Grok).
+// دالة Supabase Edge: وسيط آمن بين موقع القوارئ العشر ومزوّدي النماذج (xAI/Grok وOpenRouter).
 //
-// لماذا وسيط؟ مفتاح xAI يبقى سراً هنا ولا يظهر في الموقع ولا في GitHub.
+// لماذا وسيط؟ المفاتيح تبقى سراً هنا ولا تظهر في الموقع ولا في GitHub.
 // الأسرار المطلوبة (Supabase ← Edge Functions ← Secrets):
-//   XAI_API_KEY          مفتاح xAI (يبدأ بـ xai-)
-//   ASSISTANT_PASSPHRASE كلمة مرور طويلة تختارها أنت (20 حرفاً أو أكثر) — تُدخلها في إعدادات المحادثة بالموقع
-//   XAI_MODEL            اختياري: اسم النموذج الافتراضي (مثلاً grok-4)
+//   ASSISTANT_PASSPHRASE   كلمة مرور طويلة تختارها أنت (16 حرفاً أو أكثر) — تُدخلها في إعدادات المحادثة بالموقع
+//   XAI_API_KEY            مفتاح xAI (يبدأ بـ xai-) — لازم فقط لاستعمال Grok
+//   XAI_MODEL              اختياري: اسم نموذج Grok الافتراضي (مثلاً grok-4)
+//   OPENROUTER_API_KEY     مفتاح OpenRouter (يبدأ بـ sk-or-) — لازم فقط للنماذج المفتوحة (DeepSeek وKimi وQwen وLlama…)
+//   OPENROUTER_MODEL       اختياري: النموذج الافتراضي (الأصل openrouter/free = يختار نموذجاً مجانياً متاحاً)
+//   OPENROUTER_ALLOW_PAID  اختياري: اجعله 1 للسماح بنماذج مدفوعة. الأصل: المسموح فقط وسم :free أو openrouter/free،
+//                          فلا يستطيع أحد استهلاك رصيدك حتى لو وضعت فيه مالاً.
 //
 // مهم: عند نشر الدالة عطّل خيار «Verify JWT» لهذه الدالة، فالحماية هنا بكلمة المرور أعلاه.
 // بدون كلمة المرور لا يستطيع أحد استعمال رصيدك حتى لو عرف عنوان الدالة.
@@ -41,9 +45,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
   if (req.method !== "POST") return json({ error: "الطريقة غير مدعومة." }, 405);
 
-  const apiKey = Deno.env.get("XAI_API_KEY") ?? "";
   const pass = Deno.env.get("ASSISTANT_PASSPHRASE") ?? "";
-  if (!apiKey) return json({ error: "السر XAI_API_KEY غير مضبوط في أسرار الدالة." }, 500);
   if (pass.length < 16) {
     return json({ error: "السر ASSISTANT_PASSPHRASE غير مضبوط أو أقصر من 16 حرفاً." }, 500);
   }
@@ -73,10 +75,40 @@ Deno.serve(async (req: Request): Promise<Response> => {
     return json({ error: "حقل messages غير صالح." }, 400);
   }
 
-  const wanted = typeof body.model === "string" ? body.model : "";
-  const model = /^grok-[A-Za-z0-9._-]{1,48}$/.test(wanted)
-    ? wanted
-    : (Deno.env.get("XAI_MODEL") || "grok-4");
+  // المزوّد: xai (الأصل، للتوافق مع الموقع الحالي) أو openrouter (للنماذج المفتوحة)
+  const provider = body.provider === "openrouter" ? "openrouter" : "xai";
+  const wanted = typeof body.model === "string" ? body.model.trim() : "";
+
+  let model: string;
+  let endpoint: string;
+  let apiKey: string;
+  const extraHeaders: Record<string, string> = {};
+
+  if (provider === "openrouter") {
+    apiKey = Deno.env.get("OPENROUTER_API_KEY") ?? "";
+    if (!apiKey) return json({ error: "السر OPENROUTER_API_KEY غير مضبوط في أسرار الدالة." }, 500);
+    const allowPaid = Deno.env.get("OPENROUTER_ALLOW_PAID") === "1";
+    const fallback = Deno.env.get("OPENROUTER_MODEL") || "openrouter/free";
+    // صيغة المعرّف: مزوّد/نموذج أو مزوّد/نموذج:وسم — مثل deepseek/deepseek-chat:free
+    const okShape = /^[A-Za-z0-9._-]{1,40}\/[A-Za-z0-9._-]{1,80}(:[A-Za-z0-9._-]{1,20})?$/.test(wanted);
+    model = okShape ? wanted : fallback;
+    if (!allowPaid && model !== "openrouter/free" && !model.endsWith(":free")) {
+      return json({
+        error: "هذا النموذج غير مجاني. المسموح فقط ما ينتهي بـ :free أو openrouter/free " +
+          "(لإباحة المدفوع اضبط السر OPENROUTER_ALLOW_PAID=1).",
+      }, 403);
+    }
+    endpoint = "https://openrouter.ai/api/v1/chat/completions";
+    extraHeaders["HTTP-Referer"] = "https://alya71712-svg.github.io/readers/";
+    extraHeaders["X-Title"] = "Readers";
+  } else {
+    apiKey = Deno.env.get("XAI_API_KEY") ?? "";
+    if (!apiKey) return json({ error: "السر XAI_API_KEY غير مضبوط في أسرار الدالة." }, 500);
+    model = /^grok-[A-Za-z0-9._-]{1,48}$/.test(wanted)
+      ? wanted
+      : (Deno.env.get("XAI_MODEL") || "grok-4");
+    endpoint = "https://api.x.ai/v1/chat/completions";
+  }
 
   const maxTokens = Math.max(256, Math.min(Number(body.max_tokens) || 4096, 8192));
   const payload: Record<string, unknown> = { model, messages, stream: true, max_tokens: maxTokens };
@@ -86,13 +118,13 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
   let upstream: Response;
   try {
-    upstream = await fetch("https://api.x.ai/v1/chat/completions", {
+    upstream = await fetch(endpoint, {
       method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: "Bearer " + apiKey },
+      headers: { "Content-Type": "application/json", Authorization: "Bearer " + apiKey, ...extraHeaders },
       body: JSON.stringify(payload),
     });
   } catch {
-    return json({ error: "تعذّر الوصول إلى xAI من الدالة." }, 502);
+    return json({ error: "تعذّر الوصول إلى " + (provider === "openrouter" ? "OpenRouter" : "xAI") + " من الدالة." }, 502);
   }
 
   // نمرّر الرد كما هو (بثّ SSE عند النجاح، أو JSON الخطأ كما أرسلته xAI)
