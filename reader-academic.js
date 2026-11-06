@@ -383,7 +383,10 @@
     trigger.className = 'tbtn reader-research-trigger'; trigger.textContent = '🔬 منصات البحث العلمي';
     trigger.setAttribute('aria-haspopup', 'dialog'); trigger.setAttribute('aria-expanded', 'false');
     trigger.addEventListener('click', event => { event.stopPropagation(); togglePanel(); });
-    root.appendChild(trigger); toolbar.insertBefore(root, toolbar.firstChild);
+    root.appendChild(trigger);
+    const indexButton = Array.from(toolbar.querySelectorAll('button')).find(button => button.textContent.trim() === '☰');
+    if (indexButton && indexButton.parentElement === toolbar) toolbar.insertBefore(root, indexButton.nextSibling);
+    else toolbar.appendChild(root);
     panel = document.createElement('div'); panel.id = 'reader-research-popover'; panel.className = 'reader-research-popover';
     panel.setAttribute('role', 'dialog'); panel.setAttribute('aria-label', 'منصات البحث العلمي'); panel.hidden = true;
     document.body.appendChild(panel);
