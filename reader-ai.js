@@ -9,11 +9,23 @@
    سراً في الدالة ولا يظهر هنا ولا في GitHub.
    الإعدادات (رابط الدالة وكلمة المرور) تُشارَك مع صفحة المحادثة الرئيسية
    لأن الصفحتين على الأصل نفسه، فتُدخَل مرة واحدة فقط.
+
+   تحديث v4 (ثلاثة تعديلات):
+     ١) زر «🏠 الرئيسية» في لوحة الأزرار العلوية يعيد إلى لوحة التحكم الرئيسية.
+     ٢) محرك الذكاء قابل للاختيار: Gemini (بحث ويب حيّ ومصادر) أو «ذكاء مجاني»
+        (نماذج مفتوحة عبر OpenRouter من الدالة نفسها، بلا بحث ويب).
+     ٣) أزرار اللوحة العلوية (الصفان القديمان + شريط الذكاء) تُدمج في حاوية واحدة
+        تتمدّد أزرارها لملء كل سطر تلقائياً، فلا تبقى خانات فارغة تزيد عدد الأسطر.
    ============================================================ */
 (function(){
 'use strict';
 
 var K_URL='readers_grok_url', K_PASS='readers_grok_pass', K_MODEL='readers_gemini_model';
+var K_PROV='readers_ai_provider';                 // 'gemini' (الأصل) | 'open' (ذكاء مجاني)
+var K_OMODEL='readers_open_model';                // نفس مفتاح صفحة المحادثة الرئيسية
+var OPEN_DEFAULT='openrouter/free';
+var OPEN_ALT=['google/gemma-4-31b-it:free','google/gemma-4-26b-a4b-it:free','nvidia/nemotron-3-ultra-550b-a55b:free'];
+var HOME_URL='../index.html';                     // لوحة التحكم الرئيسية (القوارئ داخل مجلد readers/)
 var CTX_CHARS=700;            // السياق المرسل قبل التحديد وبعده
 var MAX_TEXT=6000;            // أقصى طول للنص المحدد
 var SEL_KEEP_MS=3*60*1000;    // نحتفظ بآخر تحديد هذا الوقت (لأن لمس الزر قد يُلغي التحديد على الجوال)
@@ -41,6 +53,26 @@ function defaultUrl(){
 function cfg(){
   return { url:(lsGet(K_URL)||defaultUrl()).trim(), pass:(lsGet(K_PASS)||'').trim(),
            key:(window.READER_CLOUD_CONFIG||{}).key||'' };
+}
+
+function getProv(){ return lsGet(K_PROV)==='open'?'open':'gemini'; }
+function syncProv(){
+  var p=getProv();
+  Array.prototype.forEach.call(document.querySelectorAll('select[data-rai-prov]'),function(x){ x.value=p; });
+}
+function setProv(v){ lsSet(K_PROV,v==='open'?'open':'gemini'); syncProv(); }
+function openModel(){
+  var m=(lsGet(K_OMODEL)||'').trim();
+  return /^[A-Za-z0-9._-]{1,40}\/[A-Za-z0-9._-]{1,80}(:[A-Za-z0-9._-]{1,20})?$/.test(m)?m:OPEN_DEFAULT;
+}
+// قائمة اختيار المحرك (تُستعمل في اللوحة العلوية وفي نافذة النتيجة، وتبقى متزامنة)
+function provSelect(cls){
+  var x=mk('select',{class:cls,'data-rai':'1','data-rai-prov':'1','aria-label':'محرك الذكاء',translate:'no',
+    title:'اختيار المحرك: Gemini (بحث ويب حيّ مع مصادر) أو ذكاء مجاني (نماذج مفتوحة عبر OpenRouter — تجيب من معرفتها بلا بحث ويب)'},
+    [mk('option',{value:'gemini',text:'🤖 Gemini'}),mk('option',{value:'open',text:'🆓 ذكاء مجاني'})]);
+  x.value=getProv();
+  x.addEventListener('change',function(){ setProv(x.value); });
+  return x;
 }
 
 /* ---------- التقاط التحديد ---------- */
@@ -121,9 +153,21 @@ function renderMd(target,text){
 
 /* ---------- النافذة (طبقة كاملة الشاشة ثابتة) ---------- */
 var CSS=[
-'#tb-ai{gap:5px;padding:5px 9px}',
-'#tb-ai .tbtn{padding:6px 9px;font-size:13px;min-height:34px;touch-action:manipulation}',
-'#tb-ai .ai-lab{font-size:12px;color:var(--text2);font-family:sans-serif}',
+/* --- اللوحة العلوية المدموجة: حاوية واحدة، كل زر يتمدّد ليملأ سطره فلا تبقى خانات فارغة --- */
+'#tb2,#tb-ai{display:none!important}',
+'#tb1.tb-merged{gap:4px;padding:4px 6px;align-items:stretch;align-content:flex-start}',
+'#tb1.tb-merged>.tbtn,#tb1.tb-merged>.ai-sel{flex:1 1 auto;display:inline-flex;align-items:center;justify-content:center;',
+'  text-align:center;min-height:28px;padding:3px 6px;font-size:12px;touch-action:manipulation;box-sizing:border-box}',
+'#tb1.tb-merged>.tb-pair{flex:2 1 auto;display:flex;gap:4px}',
+'#tb1.tb-merged>.tb-pair>.tbtn{flex:1 1 auto;display:inline-flex;align-items:center;justify-content:center;min-height:28px;padding:3px 6px;font-size:12px}',
+'#tb1.tb-merged>#tb-title{flex:1 1 100%;min-width:0;align-self:center;text-align:center;order:-1;padding:1px 4px}',
+'#tb1.tb-merged>input[type=file]{display:none}',
+'#tb1.tb-merged>#tb-home{border-color:var(--gold,#c8a45a);color:var(--gold,#c8a45a);font-weight:700}',
+'#tb1.tb-merged>.ai-sel,#rai-ft .ai-sel{appearance:auto;background:var(--bg2,#eee);color:var(--blue,#4a7a9a);border:1px solid var(--blue,#4a7a9a);border-radius:3px;font-family:sans-serif;cursor:pointer}',
+'#tb1.tb-merged>.ai-sel{padding:2px 2px}',
+'#rai-ft .ai-sel{min-height:40px;font-size:14px;padding:0 6px}',
+'#tb1.tb-merged>.ai-b{border-color:var(--blue,#4a7a9a);color:var(--blue,#4a7a9a)}',
+'#tb1.tb-merged>.ai-b:hover{background:rgba(74,122,154,.15)}',
 '#rai-ov{position:fixed;inset:0;z-index:9998;display:none;flex-direction:column;background:var(--bg,#fff);color:var(--text,#111);',
 '  height:100vh;height:100dvh;direction:rtl;font-family:inherit}',
 '#rai-ov.show{display:flex}',
@@ -154,10 +198,14 @@ var CSS=[
 ].join('\n');
 
 var ov, els={}, run=null; // run = {ac, mode, snap}
+function injectCss(){
+  if($('rai-style')) return;
+  var st=mk('style',{id:'rai-style'}); st.textContent=CSS; document.head.appendChild(st);
+}
 
 function buildOverlay(){
   if(ov) return;
-  var st=mk('style'); st.textContent=CSS; document.head.appendChild(st);
+  injectCss();
   els.ttl=mk('div',{id:'rai-ttl'});
   els.stop=mk('button',{type:'button',class:'tbtn',text:'⏹ إيقاف',onclick:function(){ if(run&&run.ac) run.ac.abort(); }});
   els.stop.style.display='none';
@@ -173,7 +221,7 @@ function buildOverlay(){
     onkeydown:function(e){ if(e.key==='Enter'){ e.preventDefault(); rerun(run?run.mode:'explain'); } }});
   function fbtn(t,mode){ return mk('button',{type:'button',class:'tbtn',text:t,onclick:function(){ rerun(mode); }}); }
   els.copy=mk('button',{type:'button',class:'tbtn',text:'📋 نسخ',onclick:copyOut});
-  var ft=mk('div',{id:'rai-ft'},[els.q,fbtn('💡','explain'),fbtn('🔎','search'),fbtn('🔬','deep'),els.copy]);
+  var ft=mk('div',{id:'rai-ft'},[els.q,provSelect('ai-sel'),fbtn('💡','explain'),fbtn('🔎','search'),fbtn('🔬','deep'),els.copy]);
   var hd=mk('div',{id:'rai-hd'},[els.ttl,els.stop,close]);
   ov=mk('div',{id:'rai-ov',translate:'no',lang:'ar',dir:'rtl',role:'dialog','aria-modal':'true'},[hd,els.bd,ft]);
   document.body.appendChild(ov);
@@ -198,13 +246,17 @@ function buildSettings(){
   els.sUrl=mk('input',{type:'text',autocomplete:'off',spellcheck:'false',placeholder:'https://…supabase.co/functions/v1/research-assistant'});
   els.sPass=mk('input',{type:'password',autocomplete:'off',spellcheck:'false',placeholder:'كلمة مرور المساعد (ASSISTANT_PASSPHRASE)'});
   els.sModel=mk('input',{type:'text',autocomplete:'off',spellcheck:'false',placeholder:'اتركه فارغاً = يبدأ من الأعلى ثم ينزل تلقائياً'});
+  els.sOModel=mk('input',{type:'text',autocomplete:'off',spellcheck:'false',placeholder:'openrouter/free = يختار نموذجاً مجانياً متاحاً تلقائياً'});
   els.sMsg=mk('div',{class:'hint'});
   var save=mk('button',{type:'button',class:'tbtn',text:'حفظ',onclick:function(){
     var u=els.sUrl.value.trim(), p=els.sPass.value.trim(), m=els.sModel.value.trim();
     if(!/^https:\/\/\S+$/.test(u)){ els.sMsg.textContent='رابط الدالة غير صالح.'; return; }
     if(p.length<16){ els.sMsg.textContent='كلمة المرور أقصر من 16 حرفاً — هي نفسها المضبوطة في أسرار الدالة.'; return; }
     if(m&&!/^gemini-[A-Za-z0-9._-]+$/.test(m)){ els.sMsg.textContent='اسم النموذج يجب أن يبدأ بـ gemini-'; return; }
+    var om=els.sOModel.value.trim();
+    if(om&&!/^[A-Za-z0-9._-]{1,40}\/[A-Za-z0-9._-]{1,80}(:[A-Za-z0-9._-]{1,20})?$/.test(om)){ els.sMsg.textContent='صيغة النموذج المجاني غير صحيحة — مثال: openrouter/free أو google/gemma-4-31b-it:free'; return; }
     lsSet(K_URL,u); lsSet(K_PASS,p); lsSet(K_MODEL,m); /* فارغ = تبدأ الدالة من أعلى نموذج في السلسلة */
+    lsSet(K_OMODEL,om);
     $('rai-set').classList.remove('show');
     if(settingsThen){ var f=settingsThen; settingsThen=null; f(); }
   }});
@@ -231,6 +283,7 @@ function buildSettings(){
     mk('label',{text:'رابط الدالة'}),els.sUrl,
     mk('label',{text:'كلمة مرور المساعد'}),els.sPass,
     mk('label',{text:'نموذج Gemini (اختياري)'}),els.sModel,
+    mk('label',{text:'النموذج المجاني (اختياري) — للمحرك «🆓 ذكاء مجاني»'}),els.sOModel,
     els.sMsg,
     ping,
     mk('div',{class:'row'},[save,cancel]),
@@ -243,7 +296,7 @@ var settingsThen=null;
 function openSettings(then){
   buildOverlay();
   var c=cfg();
-  els.sUrl.value=c.url; els.sPass.value=c.pass; els.sModel.value=lsGet(K_MODEL)||''; els.sMsg.textContent='';
+  els.sUrl.value=c.url; els.sPass.value=c.pass; els.sModel.value=lsGet(K_MODEL)||''; els.sOModel.value=lsGet(K_OMODEL)||''; els.sMsg.textContent='';
   settingsThen=then||null;
   $('rai-set').classList.add('show');
 }
@@ -292,7 +345,8 @@ function go(mode,s,q){
   if(run&&run.ac) run.ac.abort();
   var c=cfg();
   if(!c.url||c.pass.length<16){ openSettings(function(){ go(mode,s,q); }); return; }
-  els.ttl.textContent=LABEL[mode]+(s.book?' — '+s.book:'');
+  var openMode=getProv()==='open';
+  els.ttl.textContent=LABEL[mode]+' · '+(openMode?'🆓 مجاني':'🤖 Gemini')+(s.book?' — '+s.book:'');
   els.quote.textContent=s.text; els.quote.style.display=s.text?'':'none';
   els.status.textContent=mode==='deep'?'جارٍ التحضير…':'جارٍ الاتصال…';
   els.plan.style.display='none'; els.plan.textContent='';
@@ -301,6 +355,7 @@ function go(mode,s,q){
   ov.classList.add('show');
 
   var ac=new AbortController(); var me={ac:ac,mode:mode}; run=me;
+  if(openMode) return goOpen(me,mode,s,q,c);
   var body={ provider:'gemini', mode:mode, text:s.text, q:q,
              ctx:{ book:s.book, author:s.author, pid:s.pid, before:s.before, after:s.after } };
   var m=(lsGet(K_MODEL)||'').trim(); if(/^gemini-/.test(m)) body.model=m;
@@ -370,6 +425,141 @@ function showSources(list){
   els.src.appendChild(ol);
 }
 
+
+/* ---------- المحرك المجاني (نماذج مفتوحة عبر OpenRouter من الدالة نفسها) ---------- */
+// لا يملك بحث ويب: يجيب من معرفة النموذج. لذلك نُصرّح بذلك في الواجهة وفي التعليمات.
+var PERSONA_O='أنت مساعد بحثي لباحث عربي مستقل يعمل في التاريخ المقارن والدراسات الدينية: التاريخ الروماني والبيزنطي والمسيحية المبكرة '+
+  'والفكر الإسكندري واليهودية الهلنستية والتقاليد الإسلامية والقانونية، على مصادر أولية بالعربية واليونانية والسريانية والفرنسية والإيطالية. '+
+  'اكتب بالعربية الفصحى الواضحة، وأبقِ المصطلحات الفنية والأعلام بلغتها الأصلية بين قوسين عند أول ذكر. '+
+  'ميّز دائماً بين ما يقوله النص نفسه وما تضيفه أنت من خارجه، وبين المتفق عليه والمختلف فيه بين الباحثين. '+
+  'لا تخترع اقتباسات ولا مراجع ولا أرقام صفحات؛ وإن لم تكن متأكداً فقل ذلك صراحة. '+
+  'لا تنقل مقاطع طويلة من المصادر حرفياً؛ لخّص بصياغتك.';
+var SYS_O={
+  explain:PERSONA_O+'\n\nالمهمة: شرح النص المحدد. رتّب الجواب هكذا بعناوين قصيرة: '+
+    '١) المعنى باختصار، ٢) شرح المفردات والعبارات الغامضة، ٣) الأعلام والأحداث والسياق التاريخي، '+
+    '٤) نقاط الالتباس أو الاحتمالات في الفهم أو الترجمة. اجعل الجواب مركّزاً يُقرأ بسهولة على شاشة هاتف.',
+  search:PERSONA_O+'\n\nالمهمة: أنت لا تتصفح الويب الآن؛ أجب من معرفتك فقط. قدّم خلاصة مركّزة عمّا يخص هذا النص أو سؤال الباحث: '+
+    'ما تعرفه، ومن قاله (مصدر أولي أم دراسة أم موسوعة) وما الخلاف القائم إن وُجد. '+
+    'اذكر أسماء مصادر أو دراسات فقط إن كنت واثقاً أنها موجودة، وصرّح بما لا تعرفه. '+
+    'ابدأ الجواب بسطر: «ملاحظة: هذا من معرفة النموذج دون بحث ويب — تحقق من المصادر.» ثم اجعل الجواب موجزاً بعناوين قصيرة.',
+  deep:PERSONA_O+'\n\nالمهمة: أنت لا تتصفح الويب الآن؛ اكتب تقريراً بحثياً مركّزاً من معرفتك فقط عمّا يخص هذا النص أو سؤال الباحث. '+
+    'البنية: ملخص في سطرين، أهم النتائج، مواضع الخلاف أو عدم اليقين بين الباحثين، المصادر الأولية والدراسات التي ينبغي مراجعتها '+
+    '(سمّها فقط إن كنت واثقاً من وجودها)، ما يلزم التحقق منه، ثم خلاصة. '+
+    'ابدأ التقرير بسطر: «ملاحظة: هذا من معرفة النموذج دون بحث ويب — تحقق من المصادر.»'
+};
+function subjectText(s,q){
+  var L=[];
+  if(s.book) L.push('الكتاب: '+s.book);
+  if(s.author) L.push('المؤلف: '+s.author);
+  if(s.pid) L.push('رقم الفقرة: '+s.pid);
+  if(s.text) L.push('النص المحدد:\n'+s.text);
+  if(s.before) L.push('السياق قبله:\n'+s.before);
+  if(s.after) L.push('السياق بعده:\n'+s.after);
+  if(q) L.push('سؤال الباحث:\n'+q);
+  return L.join('\n\n');
+}
+// النماذج المفتوحة قد تُخرج <think>…</think>: نخفيها أثناء البثّ
+function thinkStrip(emit){
+  var inT=false, buf='';
+  return function(d){
+    buf+=d;
+    for(;;){
+      if(inT){
+        var e=buf.indexOf('</think>');
+        if(e<0){ buf=buf.slice(-8); return; }
+        buf=buf.slice(e+8); inT=false;
+      }else{
+        var b=buf.indexOf('<think>');
+        if(b>=0){ if(b>0) emit(buf.slice(0,b)); buf=buf.slice(b+7); inT=true; continue; }
+        var keep=0, tag='<think>';
+        for(var k=Math.min(6,buf.length);k>0;k--){ if(tag.indexOf(buf.slice(-k))===0){ keep=k; break; } }
+        if(buf.length>keep) emit(buf.slice(0,buf.length-keep));
+        buf=buf.slice(buf.length-keep); return;
+      }
+    }
+  };
+}
+function goOpen(me,mode,s,q,c){
+  els.status.textContent='🆓 النموذج المجاني يجيب من معرفته — لا بحث ويب في هذا المحرك'+(mode==='explain'?'':' (للبحث الحيّ بمصادر اختر 🤖 Gemini)');
+  var messages=[{role:'system',content:SYS_O[mode]||SYS_O.explain},{role:'user',content:subjectText(s,q)}];
+  var headers={'content-type':'application/json','x-assistant-pass':c.pass};
+  if(c.key) headers.apikey=c.key;
+  var acc='', raf=0, usedModel='', tried={}, tries=0;
+  var emit=function(d){ acc+=d; els.status.textContent=''; if(!raf) raf=requestAnimationFrame(paint); };
+  function paint(){ raf=0; renderMd(els.out,acc); }
+  function attempt(model){
+    tried[model]=1; tries++;
+    var out=thinkStrip(emit);
+    return fetch(c.url,{method:'POST',headers:headers,signal:me.ac.signal,
+      body:JSON.stringify({provider:'openrouter',model:model,messages:messages,max_tokens:4096})}).then(function(res){
+      if(!res.ok){
+        return res.json().catch(function(){ return {}; }).then(function(j){
+          var m=''; try{ m=typeof j.error==='string'?j.error:((j.error&&j.error.message)||j.message||''); }catch(e){}
+          var base=res.status===401?'كلمة مرور المساعد أو مفتاح OpenRouter غير صحيح — راجع ⚙ وأسرار الدالة.'
+            :res.status===402?'رصيد OpenRouter لا يكفي لهذا النموذج — اختر نموذجاً مجانياً (ينتهي بـ :free).'
+            :res.status===403?'هذا النموذج غير مسموح به في الدالة (المسموح: :free أو openrouter/free).'
+            :res.status===404?'الدالة أو النموذج غير موجود — راجع ⚙.'
+            :res.status===429?'بلغ النموذج (أو مزوّده) حدّ الطلبات أو كان مشغولاً — انتظر قليلاً أو بدّل النموذج.'
+            :res.status>=500?'تعذّر الإتمام من جهة الدالة أو OpenRouter ('+res.status+').'
+            :'رفض الخادم الطلب ('+res.status+').';
+          var err=new Error(base+(m?'\n'+m:''));
+          err.retryable=[408,429,502,503,504].indexOf(res.status)>=0;
+          throw err;
+        });
+      }
+      var rd=res.body.getReader(), dec=new TextDecoder(), buf='';
+      function feed(block){
+        block.split('\n').forEach(function(line){
+          if(line.indexOf('data:')!==0) return;
+          var d=line.slice(5).trim(); if(!d||d==='[DONE]') return;
+          var ev; try{ ev=JSON.parse(d); }catch(e){ return; }
+          if(ev.error) throw new Error(typeof ev.error==='string'?ev.error:(ev.error.message||'خطأ من الخادم أثناء البث.'));
+          if(ev.model&&typeof ev.model==='string') usedModel=ev.model;
+          var ch=ev.choices&&ev.choices[0]; if(!ch) return;
+          var dl=ch.delta||{}; if(dl.content) out(dl.content);
+        });
+      }
+      function pump(){
+        return rd.read().then(function(r){
+          if(r.done){ if(buf.trim()) feed(buf); return; }
+          buf+=dec.decode(r.value,{stream:true}).replace(/\r\n/g,'\n');
+          var i; while((i=buf.indexOf('\n\n'))>=0){ var blk=buf.slice(0,i); buf=buf.slice(i+2); feed(blk); }
+          return pump();
+        });
+      }
+      return pump();
+    });
+  }
+  function nextModel(){
+    for(var i=0;i<OPEN_ALT.length;i++){ if(!tried[OPEN_ALT[i]]) return OPEN_ALT[i]; }
+    return null;
+  }
+  function run1(model){
+    return attempt(model).catch(function(e){
+      var free=model===OPEN_DEFAULT||/:free$/.test(model);
+      var nm=nextModel();
+      // عطل مؤقت (حدّ أو انشغال) في مجاني: نجرّب نموذجاً مجانياً آخر تلقائياً حتى مرتين
+      if(e&&e.name!=='AbortError'&&e.retryable&&free&&tries<3&&nm&&!acc&&!me.ac.signal.aborted){
+        els.status.textContent='النموذج مشغول — أجرّب نموذجاً مجانياً آخر…';
+        return run1(nm);
+      }
+      throw e;
+    });
+  }
+  run1(openModel()).catch(function(e){
+    if(e&&e.name==='AbortError'){ els.status.textContent='أُوقف.'; return; }
+    els.err.textContent='⚠ '+(e&&e.message?e.message:'تعذّر الاتصال بالدالة.')+
+      (/Failed to fetch|NetworkError|Load failed/i.test(String(e&&e.message))?'\nتحقق من الاتصال بالإنترنت ومن نشر الدالة.':'');
+  }).then(function(){
+    if(raf){ cancelAnimationFrame(raf); paint(); }
+    if(run===me){
+      els.stop.style.display='none';
+      if(acc&&!els.err.textContent) els.status.textContent='النموذج: '+(usedModel||openModel())+' — من معرفته دون بحث ويب';
+      else if(!acc&&!els.err.textContent) els.status.textContent='لم يصل ردّ من النموذج — أعد المحاولة أو بدّل النموذج.';
+    }
+  });
+}
+
 /* ---------- رسالة قصيرة ---------- */
 var toastEl=null, toastT=null;
 function toast(msg){
@@ -383,29 +573,51 @@ function toast(msg){
   clearTimeout(toastT); toastT=setTimeout(function(){ toastEl.style.display='none'; },3200);
 }
 
-/* ---------- الشريط ---------- */
+/* ---------- اللوحة العلوية: دمج + زر الرئيسية + أزرار الذكاء ---------- */
 function installBar(){
-  if($('tb-ai')) return true;
-  var wrap=$('sticky-tb-wrap'); if(!wrap) return false;
+  var wrap=$('sticky-tb-wrap'), tb1=$('tb1'), tb2=$('tb2');
+  if(!wrap||!tb1) return false;
+  // نسخة قارئ محفوظة قد تحمل عناصر حقنتها نسخة سابقة (بلا مستمعين): نحذفها ونبنيها من جديد
+  Array.prototype.forEach.call(document.querySelectorAll('#sticky-tb-wrap [data-rai], #tb-ai'),function(el){
+    if(el.parentNode) el.parentNode.removeChild(el);
+  });
   // منع إلغاء التحديد عند لمس الأزرار (سطح المكتب) — على الجوال نعتمد على اللقطة المحفوظة
   function noBlur(e){ e.preventDefault(); }
-  function b(txt,title,fn){
-    var x=mk('button',{type:'button',class:'tbtn',text:txt,title:title,onclick:fn});
+  function b(txt,title,fn,extra){
+    var x=mk('button',{type:'button',class:'tbtn ai-b',text:txt,title:title,'data-rai':'1',translate:'no',onclick:fn});
     x.addEventListener('mousedown',noBlur); return x;
   }
-  var bar=mk('div',{class:'tb',id:'tb-ai',translate:'no'},[
-    mk('span',{class:'ai-lab',text:'🤖 ذكاء:'}),
-    b('💡 شرح','يشرح النص المحدد',function(){ start('explain'); }),
-    b('🔎 بحث','بحث على الويب بالنص المحدد مع المصادر',function(){ start('search'); }),
-    b('🔬 بحث عميق','تخطيط وعدة عمليات بحث متوازية ثم تقرير بمصادر مرقّمة (أبطأ: نحو دقيقة)',function(){ start('deep'); }),
-    b('⚙','إعدادات شريط الذكاء',function(){ openSettings(); })
-  ]);
-  var anchor=$('find-bar');
-  if(anchor&&anchor.parentNode===wrap) wrap.insertBefore(bar,anchor); else wrap.appendChild(bar);
+
+  // ١) دمج أزرار الصف الثاني في الصف الأول: حاوية واحدة تتمدّد أزرارها فتملأ كل سطر
+  if(!tb1.classList.contains('tb-merged')){
+    if(tb2){
+      while(tb2.firstChild) tb1.appendChild(tb2.firstChild); // تبقى المعرّفات والمستمعون كما هي
+    }
+    tb1.classList.add('tb-merged');
+  }
+
+  // ٢) زر الرجوع إلى لوحة التحكم الرئيسية (بعد زر ☰ مباشرة)
+  var home=mk('button',{type:'button',class:'tbtn',id:'tb-home','data-rai':'1',translate:'no',
+    title:'العودة إلى لوحة التحكم الرئيسية (القوارئ العشر)',text:'🏠 الرئيسية',
+    onclick:function(){ try{ if(window.ReaderCloud&&ReaderCloud.schedulePush) ReaderCloud.schedulePush(); }catch(e){} location.href=HOME_URL; }});
+  var first=null;
+  for(var n=tb1.firstChild;n;n=n.nextSibling){ if(n.nodeType===1){ first=n; break; } }
+  if(first&&first.nextSibling) tb1.insertBefore(home,first.nextSibling); else tb1.appendChild(home);
+
+  // ٣) أزرار الذكاء في نفس الحاوية (آخرها): اختيار المحرك ثم شرح/بحث/بحث عميق/إعدادات
+  tb1.appendChild(provSelect('ai-sel'));
+  tb1.appendChild(b('⚙','إعدادات شريط الذكاء (رابط الدالة وكلمة المرور والنماذج)',function(){ openSettings(); }));
+  tb1.appendChild(b('💡 شرح','يشرح النص المحدد',function(){ start('explain'); }));
+  tb1.appendChild(b('🔎 بحث','بحث بالنص المحدد (Gemini: على الويب مع مصادر — المجاني: من معرفة النموذج)',function(){ start('search'); }));
+  tb1.appendChild(b('🔬 بحث عميق','Gemini: تخطيط وعدة عمليات بحث ثم تقرير بمصادر (نحو دقيقة) — المجاني: تقرير من معرفة النموذج',function(){ start('deep'); }));
+  syncProv();
   return true;
 }
 
 function init(){
+  // نسخة قارئ محفوظة قد تحمل نافذة/أنماط نسخة سابقة بلا مستمعين: نحذفها فتُبنى من جديد
+  Array.prototype.forEach.call(document.querySelectorAll('#rai-ov, #rai-set, #rai-style'),function(el){ if(el.parentNode) el.parentNode.removeChild(el); });
+  injectCss();
   if(!installBar()){
     // القارئ يبني الشريط عند التحميل؛ نعيد المحاولة قليلاً
     var n=0, t=setInterval(function(){ if(installBar()||++n>40) clearInterval(t); },250);
@@ -413,5 +625,5 @@ function init(){
 }
 if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',init); else init();
 
-window.ReaderAI={ run:start, openSettings:openSettings };
+window.ReaderAI={ run:start, openSettings:openSettings, setProvider:setProv, provider:getProv };
 })();
