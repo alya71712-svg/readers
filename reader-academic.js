@@ -8,7 +8,7 @@
       { id: 'consensus', mode: 'question', name: 'Consensus', url: 'https://consensus.app/search/', note: 'سؤال طبيعي عن الأدلة العلمية' },
       { id: 'elicit', mode: 'question', name: 'Elicit', url: 'https://elicit.com/', note: 'وكيل بحث ومراجعة أدبيات' },
       { id: 'scite', mode: 'question', name: 'Scite Assistant', url: 'https://scite.ai/assistant', note: 'بحث وسياق الاستشهادات الداعمة أو المعارضة' },
-      { id: 'scispace', mode: 'question', name: 'SciSpace', url: 'https://scispace.com/search', note: 'بحث أوراق؛ محادثة PDF تتطلب إدخال الورقة' },
+      { id: 'scispace', mode: 'question', name: 'SciSpace', url: 'https://scispace.com/search', note: '100 رصيد Agent شهرياً؛ محادثة PDF تتطلب إدخال الورقة' },
       { id: 'openread', mode: 'question', name: 'OpenRead', url: 'https://www.openread.academy/', note: '5 استخدامات شهرياً لبعض مزايا البحث وقراءة الأوراق' },
       { id: 'liner-scholar', mode: 'question', name: 'Liner Scholar (ScholarLiner)', url: 'https://liner.com/scholar', note: 'رصيد مجاني يتجدد شهرياً؛ عدد الرصيد غير معلن' },
       { id: 'paperguide', mode: 'question', name: 'Paperguide', url: 'https://paperguide.ai/', note: '1,500 رصيد و20 بحث AI شهرياً بالخطة المجانية' },
