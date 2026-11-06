@@ -139,10 +139,16 @@ body.panel-hidden .panel-toggle{position:fixed;right:0;top:50%;transform:transla
 .exp-chk{display:flex;align-items:center;gap:8px;margin:5px 0;font-size:14px;font-weight:400}
 .exp-chk input{width:18px;height:18px;margin:0}
 .exp-out{min-height:220px;font-size:13px;line-height:1.7;resize:vertical}
-.exp-info{font-size:13px;color:var(--accent);min-height:20px;margin:8px 0}
+.exp-info{min-height:20px;font-size:13px;color:var(--accent);margin:8px 0}
 .chat-form label{display:block;margin:12px 0 5px;font-weight:700;font-size:14px}
 .chat-form p{margin:6px 0;font-size:13px;line-height:1.8;color:var(--muted)}
 .chat-form .row{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+.manus-brief{padding:12px 14px;border:1px solid color-mix(in srgb,var(--accent) 28%,var(--line));border-radius:14px;background:var(--soft);line-height:1.8}
+.manus-steps{margin:9px 0 2px;padding-inline-start:22px;color:var(--muted);font-size:13px;line-height:1.9}
+.manus-actions{align-items:stretch}
+.manus-actions>*{flex:1 1 150px;text-align:center;justify-content:center;min-height:44px}
+.manus-open-link{display:inline-flex;align-items:center;border-radius:11px;padding:10px 15px;font-weight:700;text-decoration:none;background:var(--soft);color:var(--accent);border:1px solid color-mix(in srgb,var(--accent) 25%,var(--line))}
+.manus-open-link:focus-visible{outline:3px solid color-mix(in srgb,var(--accent) 45%,transparent);outline-offset:2px}
 @media(max-width:760px){.modal.chat-modal{width:100%;height:94vh;height:94dvh;padding:12px;border-radius:16px}}
 </style>
 </head>
@@ -171,10 +177,10 @@ body.panel-hidden .panel-toggle{position:fixed;right:0;top:50%;transform:transla
           <button class="nav-btn" type="button" onclick="recheck()"><span class="nav-icon">⟳</span>إعادة فحص الملفات</button>
           <button class="nav-btn" type="button" onclick="openCloud()"><span class="nav-icon">☁</span>المزامنة السحابية</button>
           <button class="nav-btn" type="button" onclick="openChat()"><span class="nav-icon">💬</span>محادثة (نماذج مفتوحة أو Gemini أو Grok أو Claude)</button>
-          <button class="nav-btn" type="button" onclick="openExport()"><span class="nav-icon">📋</span>نسخ سياق للتطبيق</button>
+          <button class="nav-btn" type="button" onclick="openExport()"><span class="nav-icon">📋</span>نسخ إلى Manus</button>
           <a class="nav-btn" href="https://manus.im/" target="_blank" rel="noopener noreferrer" aria-label="افتح Manus في تبويب جديد للدراسة"><span class="nav-icon">↗</span>افتح Manus للدراسة</a>
         </div>
-        <div class="panel-note">كل قارئ يحفظ علاماته وملاحظاته وتظليله ومكان توقفك على هذا المتصفح، وتُنسخ سحابياً عند تفعيل «المزامنة السحابية» لتظهر على أي جهاز. زر Manus يفتح Manus في تبويب جديد؛ لن ينقل النص أو المحادثة تلقائياً، لذا اذكر اسم القارئ أو أرسل رابطه هناك.</div>
+        <div class="panel-note">جهّز حزمة من تظليلك وملاحظاتك والمواضع أو فقرات الكتب، ثم شاركها إلى Manus من قائمة مشاركة الجهاز أو انسخها والصقها يدوياً. لا يحتاج هذا الربط مفتاح API.</div>
       </aside>
     </main>
   </div>
@@ -185,7 +191,7 @@ body.panel-hidden .panel-toggle{position:fixed;right:0;top:50%;transform:transla
 
 <script src="cloud-config.js?v=1"></script>
 <script src="cloud-sync.js?v=2"></script>
-<script src="reader-bridge.js?v=1"></script>
+<script src="reader-bridge.js?v=2"></script>
 <script>
 // ============================================================
 // قائمة القوارئ العشر — عدّل هذه القائمة فقط لتغيير ما يظهر في الموقع.
@@ -1076,10 +1082,10 @@ function openChatSettings(first){
   openModal('إعدادات المحادثة',body);
 }
 
-// ---------- نسخ سياق للتطبيق: يجمّع تظليلك وملاحظاتك وبحثك في نص واحد تلصقه في تطبيق Claude (بلا مفتاح ولا رصيد) ----------
+// ---------- جسر Manus: يجهّز سياق القراءة محلياً ثم يشاركه المستخدم صراحةً ----------
 function openExport(){
   const RB=window.ReaderBridge;
-  if(!RB||!RB.exportText){openModal('نسخ سياق للتطبيق',el('p',{text:'وحدة الربط لم تُحمَّل — أعد تحميل الصفحة.'}));return}
+  if(!RB||!RB.exportText){openModal('نسخ إلى Manus',el('p',{text:'وحدة الربط لم تُحمَّل — أعد تحميل الصفحة.'}));return}
   const rsel=el('select',{class:'chat-field',id:'expReader'},[el('option',{value:'all',text:'كل القوارئ'})].concat(READERS.filter(r=>r.texts).map(r=>el('option',{value:r.id,text:r.title}))));
   const chk=(label,on)=>{const i=el('input',{type:'checkbox'});i.checked=!!on;return {i,row:el('label',{class:'exp-chk'},[i,document.createTextNode(label)])}};
   const cH=chk('تظليلي (مع ملاحظة كل تظليل)',true),cN=chk('ملاحظاتي',true),cB=chk('إشاراتي العادية',false),cP=chk('مواضع توقفي (يحمّل ملفات القوارئ المعنية)',false);
@@ -1088,40 +1094,55 @@ function openExport(){
   const mode=el('select',{class:'chat-field'},[['all_words','كل الكلمات في الفقرة'],['any','أي كلمة'],['phrase','العبارة كما هي']].map(([v,t])=>el('option',{value:v,text:t})));
   const lim=el('select',{class:'chat-field'},[5,10,20,30].map(n=>{const o=el('option',{value:String(n),text:n+' فقرات'});if(n===10)o.selected=true;return o}));
   const qu=el('textarea',{class:'chat-field',rows:'3',placeholder:'اكتب سؤالك هنا ليُضاف في آخر النص (اختياري)'});
-  const out=el('textarea',{class:'chat-field exp-out',readonly:'readonly',placeholder:'سيظهر هنا النص الجاهز للنسخ…'});
-  const info=el('div',{class:'exp-info',role:'status'});
-  const copyBtn=el('button',{type:'button',class:'secondary',text:'📋 نسخ',disabled:'disabled'});
-  const buildBtn=el('button',{type:'button',text:'تجهيز النص'});
+  const out=el('textarea',{class:'chat-field exp-out',readonly:'readonly',placeholder:'جهّز الحزمة لتظهر هنا…','aria-label':'معاينة النص الجاهز للمشاركة مع Manus'});
+  const info=el('div',{class:'exp-info',role:'status','aria-live':'polite'});
+  const copyBtn=el('button',{type:'button',class:'secondary',text:'📋 نسخ النص',disabled:'disabled'});
+  const shareBtn=el('button',{type:'button',class:'ghost',text:'مشاركة عبر التطبيقات',disabled:'disabled'});
+  const manusLink=el('a',{class:'manus-open-link',href:'https://manus.im/',target:'_blank',rel:'noopener noreferrer','aria-label':'فتح Manus في تبويب جديد',text:'فتح Manus ↗'});
+  const buildBtn=el('button',{type:'button',text:'تجهيز حزمة Manus'});
   const names={highlights:'تظليل',notes:'ملاحظات',bookmarks:'إشارات',positions:'مواضع',search:'فقرات مطابقة'};
   buildBtn.onclick=async()=>{
-    buildBtn.disabled=true;copyBtn.disabled=true;out.value='';info.textContent='جارٍ التجهيز…';
+    buildBtn.disabled=true;copyBtn.disabled=true;shareBtn.disabled=true;out.value='';info.textContent='جارٍ التجهيز…';
     chatStatusHook=t=>{info.textContent=t||'جارٍ التجهيز…'};
     try{
       const r=await RB.exportText({reader:rsel.value,kinds:{highlights:cH.i.checked,notes:cN.i.checked,bookmarks:cB.i.checked,positions:cP.i.checked},filter:filt.value.trim(),
-        search:q.value.trim()?{query:q.value.trim(),mode:mode.value,limit:Number(lim.value)}:null,question:qu.value});
+        search:q.value.trim()?{query:q.value.trim(),mode:mode.value,limit:Number(lim.value)}:null,question:qu.value,sourceUrl:location.href});
       out.value=r.text;
       info.textContent=Object.keys(r.counts).map(k=>(names[k]||k)+': '+r.counts[k]).join(' · ')+' — '+r.chars.toLocaleString('ar-EG')+' حرفاً'+(r.truncated?' (اقتُطع بعضها لطول النص)':'');
-      copyBtn.disabled=false;
+      copyBtn.disabled=false;shareBtn.disabled=false;
     }catch(e){info.textContent='تعذّر التجهيز: '+((e&&e.message)||e)}
     finally{chatStatusHook=null;buildBtn.disabled=false}
   };
   copyBtn.onclick=async()=>{
-    try{await navigator.clipboard.writeText(out.value);info.textContent='✓ نُسخ النص — افتح تطبيق Claude والصقه في محادثة جديدة.'}
+    try{await navigator.clipboard.writeText(out.value);info.textContent='✓ نُسخ النص. افتحي Manus والصقيه في محادثة جديدة.'}
     catch{
       out.focus();out.select();try{out.setSelectionRange(0,out.value.length)}catch{}
       let done=false;try{done=document.execCommand('copy')}catch{}
-      info.textContent=done?'✓ نُسخ النص — افتح تطبيق Claude والصقه في محادثة جديدة.':'تعذّر النسخ التلقائي: النص محدَّد، اضغط عليه مطولاً واختر «نسخ».';
+      info.textContent=done?'✓ نُسخ النص. افتحي Manus والصقيه في محادثة جديدة.':'تعذّر النسخ التلقائي: النص محدَّد، اضغطي عليه مطولاً واختر «نسخ».';
     }
   };
-  openModal('نسخ سياق للتطبيق',el('div',{class:'chat-form'},[
-    el('p',{text:'يجمع تظليلك وملاحظاتك وبحثك في نص واحد تلصقه في تطبيق Claude، فتستعمل باقتك الحالية دون مفتاح API ولا رصيد. البيانات تُقرأ من هذا الجهاز فقط.'}),
+  shareBtn.onclick=async()=>{
+    if(typeof navigator.share!=='function'){info.textContent='المشاركة من الجهاز غير متاحة في هذا المتصفح. استخدمي «نسخ النص» ثم افتحي Manus والصقيه.';return}
+    try{await navigator.share({title:'حزمة دراسة من القوارئ العشر',text:out.value});info.textContent='✓ عادت المشاركة من الجهاز. اختاري Manus إن ظهر ضمن التطبيقات.'}
+    catch(e){info.textContent=e&&e.name==='AbortError'?'أُلغيت المشاركة؛ بقي النص جاهزاً للنسخ.':'تعذّرت المشاركة من الجهاز. استخدمي «نسخ النص» بدلاً منها.'}
+  };
+  openModal('نسخ إلى Manus',el('div',{class:'chat-form'},[
+    el('div',{class:'manus-brief'},[
+      el('strong',{text:'حوّلي قراءتك إلى سياق جاهز للدراسة'}),
+      el('p',{text:'اختاري ما تريدين تضمينه، ثم شاركيه من قائمة الجهاز واختاري Manus إذا ظهر، أو انسخي النص وافتحي Manus للصقه يدوياً. لا يحتاج هذا المسار مفتاح API ولا يرسل بياناتك إلى خادم الموقع.'}),
+      el('ol',{class:'manus-steps'},[
+        el('li',{text:'جهّزي الحزمة من تظليلك وملاحظاتك والمواضع أو فقرات الكتب.'}),
+        el('li',{text:'استخدمي «مشاركة عبر التطبيقات» للوصول إلى قائمة المشاركة، أو «نسخ النص».'}),
+        el('li',{text:'في Manus اطلبي التحليل مباشرة؛ لا تُشارك أي بيانات إلا بعد اختيار التطبيق أو النسخ.'})
+      ])
+    ]),
     el('label',{text:'القارئ'}),rsel,
     el('label',{text:'ما الذي يُضمَّن؟'}),cH.row,cN.row,cB.row,cP.row,
     el('label',{text:'فلترة بكلمة (اختياري — تطبق على التظليل والملاحظات والإشارات)'}),filt,
     el('label',{text:'بحث في نصوص الكتب (اختياري)'}),q,
     el('div',{class:'row'},[mode,lim]),
     el('label',{text:'سؤالك (اختياري)'}),qu,
-    el('div',{class:'row'},[buildBtn,copyBtn]),
+    el('div',{class:'row manus-actions'},[buildBtn,shareBtn,copyBtn,manusLink]),
     info,out
   ]));
 }
