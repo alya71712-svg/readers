@@ -187,9 +187,11 @@ async function gemPick(
   let lastErr = "";
   let tried = 0;
   const log: string[] = []; // ما جُرّب فعلاً: «نموذج (حالة)» — يظهر في رسالة الخطأ النهائية
+  // حصة بحث الويب (Grounding) مستقلة عن حصة النص العادي، فلا نخلط بينهما في ذاكرة الاستنفاد
+  const tk = Array.isArray((payload as any)?.tools) && (payload as any).tools.some((t: any) => t?.googleSearch) ? "|s" : "";
   for (let ci = 0; ci < chain.length; ci++) {
     const m = chain[ci];
-    if ((exhausted.get(m) || 0) > Date.now()) continue;
+    if ((exhausted.get(m + tk) || 0) > Date.now()) continue;
     if (Date.now() - t0 > 100_000) break; // حدّ Supabase 150 ثانية
     if (tried++ > 0) note?.("↪ أنتقل إلى نموذج آخر: " + m);
     for (let attempt = 0; attempt < 2; attempt++) {
@@ -210,9 +212,9 @@ async function gemPick(
       } catch { /* ignore */ }
       lastErr = gemErrMsg(res.status, em) + (em ? "\n" + em : "");
       if (!log.some((x) => x.startsWith(m + " "))) log.push(m + " (" + res.status + ")");
-      if (res.status === 404) exhausted.set(m, Date.now() + 6 * 3_600_000); // محذوف/غير متاح لهذا المفتاح: لا نعيد تجربته ست ساعات
+      if (res.status === 404) exhausted.set(m + tk, Date.now() + 6 * 3_600_000); // محذوف/غير متاح لهذا المفتاح: لا نعيد تجربته ست ساعات
       if (res.status === 429) {
-        exhausted.set(m, Date.now() + (/per ?day|PerDay/i.test(em) ? 3_600_000 : 90_000));
+        exhausted.set(m + tk, Date.now() + (/per ?day|PerDay/i.test(em) ? 3_600_000 : 90_000));
         break;
       }
       if (RETRYABLE(res.status) && attempt === 0) {
@@ -354,6 +356,11 @@ const PERSONA =
   "لا تخترع اقتباسات ولا مراجع ولا أرقام صفحات؛ وإن لم تكن متأكداً فقل ذلك صراحة. " +
   "لا تنقل مقاطع طويلة من المصادر حرفياً؛ لخّص بصياغتك.";
 
+const NOWEB_SYS = PERSONA +
+  "\n\nالمهمة: لا تتوفر لديك أداة بحث ويب الآن (حصة البحث نفدت)؛ أجب من معرفتك فقط عمّا يخص هذا النص أو سؤال الباحث. " +
+  "ابدأ بسطر: «ملاحظة: هذا من معرفة النموذج دون بحث ويب — تحقق من المصادر.» ثم قدّم خلاصة موجزة بعناوين قصيرة، " +
+  "واذكر مصادر أو دراسات فقط إن كنت واثقاً من وجودها، وصرّح بما لا تعرفه.";
+
 const EXPLAIN_SYS = PERSONA +
   "\n\nالمهمة: شرح النص المحدد. رتّب الجواب هكذا بعناوين قصيرة: " +
   "١) المعنى باختصار، ٢) شرح المفردات والعبارات الغامضة، ٣) الأعلام والأحداث والسياق التاريخي، " +
@@ -399,7 +406,19 @@ async function runSingle(
   if (mode === "search") payload.tools = [{ googleSearch: {} }];
 
   return sseResponse(async (send, signal) => {
-    const { res, model: used } = await gemPick("streamGenerateContent", payload, key, signal, model, headerMs(), (m) => send({ t: "status", m }));
+    let picked: Pick;
+    try {
+      picked = await gemPick("streamGenerateContent", payload, key, signal, model, headerMs(), (m) => send({ t: "status", m }));
+    } catch (e) {
+      // البحث بالويب يحتاج حصة Grounding؛ إن نفدت على كل النماذج نجيب بلا بحث بدل الفشل الكامل
+      if (mode === "search" && /\(429\)/.test(errText(e)) && !signal.aborted) {
+        send({ t: "status", m: "⚠ حصة بحث الويب نفدت — أجيب من معرفة النموذج دون بحث ويب" });
+        delete payload.tools;
+        (payload.systemInstruction as any) = { parts: [{ text: NOWEB_SYS }] };
+        picked = await gemPick("streamGenerateContent", payload, key, signal, model, headerMs(), (m) => send({ t: "status", m }));
+      } else throw e;
+    }
+    const { res, model: used } = picked;
     const sources = new Map<string, Src>();
     let got = false;
     let finish = "";
