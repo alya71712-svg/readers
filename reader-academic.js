@@ -9,6 +9,10 @@
       { id: 'elicit', mode: 'question', name: 'Elicit', url: 'https://elicit.com/', note: 'وكيل بحث ومراجعة أدبيات' },
       { id: 'scite', mode: 'question', name: 'Scite Assistant', url: 'https://scite.ai/assistant', note: 'بحث وسياق الاستشهادات الداعمة أو المعارضة' },
       { id: 'scispace', mode: 'question', name: 'SciSpace', url: 'https://scispace.com/search', note: 'بحث أوراق؛ محادثة PDF تتطلب إدخال الورقة' },
+      { id: 'openread', mode: 'question', name: 'OpenRead', url: 'https://www.openread.academy/', note: '5 استخدامات شهرياً لبعض مزايا البحث وقراءة الأوراق' },
+      { id: 'liner-scholar', mode: 'question', name: 'Liner Scholar (ScholarLiner)', url: 'https://liner.com/scholar', note: 'رصيد مجاني يتجدد شهرياً؛ عدد الرصيد غير معلن' },
+      { id: 'paperguide', mode: 'question', name: 'Paperguide', url: 'https://paperguide.ai/', note: '1,500 رصيد و20 بحث AI شهرياً بالخطة المجانية' },
+      { id: 'paperpal', mode: 'question', name: 'Paperpal', url: 'https://paperpal.com/', note: 'ميزات AI حتى 5 مرات يومياً؛ الحدود تختلف حسب الأداة' },
       { id: 'undermind', mode: 'question', name: 'Undermind', url: 'https://app.undermind.ai/', note: 'بحث عميق ينطلق من هدف أو سؤال' },
       { id: 'perplexity', mode: 'question', name: 'Perplexity', url: 'https://www.perplexity.ai/', note: 'بحث ويب وأكاديمي مع مصادر' }
     ]},
@@ -21,9 +25,15 @@
       { id: 'semantic-scholar', mode: 'search', name: 'Semantic Scholar', url: 'https://www.semanticscholar.org/', note: 'محرك بحث أكاديمي؛ السؤال متاح لبعض الأوراق' },
       { id: 'openalex', mode: 'search', name: 'OpenAlex', url: 'https://openalex.org/', note: 'فهرس مفتوح؛ واجهة API منفصلة للبحث الدلالي' }
     ]},
+    { group: 'مساعدات عامة بحصص مجانية متجددة', items: [
+      { id: 'overchat', mode: 'question', name: 'Overchat AI', url: 'https://overchat.ai/', note: '100 رصيد يومياً؛ مساعد عام لا قاعدة أوراق متخصصة' },
+      { id: 'gemini-deep-research', mode: 'question', name: 'Gemini Deep Research', url: 'https://gemini.google.com/', note: 'ضمن حدود Gemini المجانية؛ تتجدد كل 5 ساعات مع حد أسبوعي غير معلن' },
+      { id: 'claude', mode: 'question', name: 'Claude (مساعد عام)', url: 'https://claude.ai/', note: 'حد استخدام متغير يتجدد كل 5 ساعات وأسبوعياً؛ Research مدفوع' }
+    ]},
     { group: 'دفاتر المصادر وتلخيص النصوص', items: [
       { id: 'google-notebooklm', mode: 'source', name: 'Google NotebookLM', url: 'https://notebooklm.google.com/', note: 'أضف الحزمة كمصدر إلى دفتر ثم اطرح سؤالك' },
-      { id: 'scholarcy', mode: 'document', name: 'Scholarcy', url: 'https://library.scholarcy.com/', note: 'استيراد نص أو مستند لتلخيصه' }
+      { id: 'scholarcy', mode: 'document', name: 'Scholarcy', url: 'https://library.scholarcy.com/', note: 'استيراد نص أو مستند لتلخيصه' },
+      { id: 'chatpdf', mode: 'document', name: 'ChatPDF', url: 'https://www.chatpdf.com/', note: 'مستندان يومياً؛ الصق النص أو ارفع الملف كمصدر أولاً' }
     ]}
   ];
 
@@ -168,9 +178,13 @@
         ? 'حزمة مصدر لإضافتها يدوياً إلى دفتر مصادر. بعد إضافة النص كمصدر، أجب عن السؤال: ما الأدلة العلمية أو المصادر الأولية ذات الصلة بالفكرة، وما حدودها؟'
         : 'Source packet to add manually to a research notebook. After adding this text as a source, answer: What scholarly evidence or primary sources are relevant to the idea, and what are their limitations?');
     } else if (mode === 'document') {
-      add(arabic
-        ? 'نص مستورد للتلخيص والتنظيم. لخّص المادة المقتبسة أدناه بدقة، واستخرج الفكرة والمصطلحات والادعاءات الأساسية. ميّز ما يقوله النص عما لا يثبته.'
-        : 'Imported text for summarization and organization. Summarize the passage accurately and extract its central idea, terms, and claims. Distinguish what the passage says from what it does not establish.');
+      add(platformId === 'chatpdf'
+        ? (arabic
+          ? 'أضف المقتطف أدناه كمصدر نصي في ChatPDF أو الصقه في مساحة المستند، ثم حلّل حجته ومفاهيمه وأجب عن سؤال بحثي مرتبط به اعتماداً على المصدر. ميّز ما يقوله النص عما لا يثبته.'
+          : 'Add the passage below as a text source in ChatPDF or paste it into the document area. Analyze its argument and concepts, then answer a research question about it using the source. Distinguish what the text says from what it does not establish.')
+        : (arabic
+          ? 'نص مستورد للتلخيص والتنظيم. لخّص المادة المقتبسة أدناه بدقة، واستخرج الفكرة والمصطلحات والادعاءات الأساسية. ميّز ما يقوله النص عما لا يثبته.'
+          : 'Imported text for summarization and organization. Summarize the passage accurately and extract its central idea, terms, and claims. Distinguish what the passage says from what it does not establish.'));
     } else if (arabic) {
       add('أجرِ بحثاً أكاديمياً موثقاً للإجابة عن السؤال البحثي الآتي: ما مدى دقة الفكرة أو الادعاء الوارد في المقتطف، وكيف تفسره الدراسات والمصادر الأولية ذات الصلة؟');
       add('اعرض الأدلة المؤيدة والمعارضة، وميّز بوضوح بين المصادر الأولية والدراسات المحكمة أو الثانوية. أورد الاستشهادات وروابط الناشر أو DOI عند توفرها، واذكر حدود الأدلة والخلافات البحثية. لا تتعامل مع المقتطف بوصفه حقيقة مثبتة، ولا تخترع مراجع.');
@@ -261,7 +275,7 @@
   }
   function renderPanel() {
     if (!panel) return;
-    panel.innerHTML = '<div class="reader-research-head"><div><strong>🔬 منصات البحث العلمي</strong><div class="reader-research-sub">تُنسخ الحزمة ولا تُرسل تلقائياً. أدخلها يدوياً؛ أدوات الخرائط تحتاج غالباً ورقة أو DOI، والدفاتر تتطلب إضافة النص كمصدر.</div></div><button type="button" class="reader-research-close" aria-label="إغلاق">×</button></div>' +
+    panel.innerHTML = '<div class="reader-research-head"><div><strong>🔬 منصات البحث العلمي</strong><div class="reader-research-sub">تُنسخ الحزمة ولا تُرسل تلقائياً. الصقيها يدوياً. حدود الاستخدام المجاني قد تختلف أو تتغير؛ أدوات الخرائط تحتاج غالباً ورقة أو DOI، والدفاتر تتطلب إضافة النص كمصدر.</div></div><button type="button" class="reader-research-close" aria-label="إغلاق">×</button></div>' +
       '<div class="reader-research-context"></div>' +
       '<div class="reader-research-actions"><button type="button" class="reader-research-secondary" data-action="use-selection">استخدام النص المحدد</button><button type="button" class="reader-research-secondary" data-action="show-annotations">اختيار ملاحظة أو تظليل محفوظ</button></div>' +
       '<div class="reader-research-picker" ' + (state.view === 'annotations' ? '' : 'hidden') + '><label>ابحث في الملاحظات والتظليلات<input type="search" class="reader-research-filter" placeholder="عنوان الكتاب أو نص الملاحظة…"></label><label class="reader-research-filter-check"><input type="checkbox" class="reader-research-current-only" checked> الكتاب المفتوح فقط</label><div class="reader-research-annotation-list"></div></div>' +
