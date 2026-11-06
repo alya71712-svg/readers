@@ -197,14 +197,14 @@ function buildSettings(){
   var c=cfg();
   els.sUrl=mk('input',{type:'text',autocomplete:'off',spellcheck:'false',placeholder:'https://…supabase.co/functions/v1/research-assistant'});
   els.sPass=mk('input',{type:'password',autocomplete:'off',spellcheck:'false',placeholder:'كلمة مرور المساعد (ASSISTANT_PASSPHRASE)'});
-  els.sModel=mk('input',{type:'text',autocomplete:'off',spellcheck:'false',placeholder:'اختياري — مثل gemini-3.8-flash'});
+  els.sModel=mk('input',{type:'text',autocomplete:'off',spellcheck:'false',placeholder:'اتركه فارغاً = يبدأ من الأعلى ثم ينزل تلقائياً'});
   els.sMsg=mk('div',{class:'hint'});
   var save=mk('button',{type:'button',class:'tbtn',text:'حفظ',onclick:function(){
     var u=els.sUrl.value.trim(), p=els.sPass.value.trim(), m=els.sModel.value.trim();
     if(!/^https:\/\/\S+$/.test(u)){ els.sMsg.textContent='رابط الدالة غير صالح.'; return; }
     if(p.length<16){ els.sMsg.textContent='كلمة المرور أقصر من 16 حرفاً — هي نفسها المضبوطة في أسرار الدالة.'; return; }
     if(m&&!/^gemini-[A-Za-z0-9._-]+$/.test(m)){ els.sMsg.textContent='اسم النموذج يجب أن يبدأ بـ gemini-'; return; }
-    lsSet(K_URL,u); lsSet(K_PASS,p); if(m) lsSet(K_MODEL,m);
+    lsSet(K_URL,u); lsSet(K_PASS,p); lsSet(K_MODEL,m); /* فارغ = تبدأ الدالة من أعلى نموذج في السلسلة */
     $('rai-set').classList.remove('show');
     if(settingsThen){ var f=settingsThen; settingsThen=null; f(); }
   }});

@@ -116,6 +116,67 @@ const RETRYABLE = (st: number) => st === 429 || st === 500 || st === 502 || st =
 const GEM_FALLBACK = "gemini-2.5-flash";
 const headerMs = () => Number(Deno.env.get("GEMINI_HEADER_MS")) || 25_000;
 
+// سلسلة النماذج: من الأعلى جودةً إلى الأقل. إن نفدت حصة نموذج أو تعذّر انتقلنا تلقائياً إلى التالي.
+const CHAIN_DEFAULT = ["gemini-3.8-flash", "gemini-3.5-flash", "gemini-2.5-flash", "gemini-flash-lite-latest", "gemini-2.5-flash-lite"];
+const exhausted = new Map<string, number>(); // نموذج → وقت (ms) يُعاد بعده تجربته
+function chainFor(first: string): string[] {
+  const env = (Deno.env.get("GEMINI_CHAIN") || "").split(",").map((x) => x.trim())
+    .filter((x) => /^gemini-[A-Za-z0-9._-]{1,48}$/.test(x));
+  const base = env.length ? env : CHAIN_DEFAULT;
+  const i = base.indexOf(first);
+  return i >= 0 ? base.slice(i) : [first, ...base];
+}
+type Pick = { res: Response; model: string };
+// يجرّب النماذج بالترتيب حتى يحصل على ردّ ناجح. 429 = نفدت حصة هذا النموذج فننتقل فوراً.
+async function gemPick(
+  method: "generateContent" | "streamGenerateContent",
+  payload: unknown,
+  key: string,
+  signal: AbortSignal,
+  first: string,
+  hdrMs: number,
+  note?: (m: string) => void,
+): Promise<Pick> {
+  const t0 = Date.now();
+  const chain = chainFor(first);
+  let lastErr = "";
+  let tried = 0;
+  for (let ci = 0; ci < chain.length; ci++) {
+    const m = chain[ci];
+    if ((exhausted.get(m) || 0) > Date.now()) continue;
+    if (Date.now() - t0 > 100_000) break; // حدّ Supabase 150 ثانية
+    if (tried++ > 0) note?.("↪ أنتقل إلى نموذج آخر: " + m);
+    for (let attempt = 0; attempt < 2; attempt++) {
+      if (signal.aborted) throw new Error("أُلغي الطلب.");
+      let res: Response;
+      try {
+        res = await gemFetch(m, method, payload, key, signal, hdrMs);
+      } catch {
+        if (signal.aborted) throw new Error("أُلغي الطلب.");
+        lastErr = "تأخّر Gemini في الاستجابة — أعد المحاولة بعد قليل.";
+        break; // نموذج لا يردّ: ننتقل للتالي مباشرة
+      }
+      if (res.ok && (res.body || method === "generateContent")) return { res, model: m };
+      let em = "";
+      try {
+        em = (await res.json())?.error?.message || "";
+      } catch { /* ignore */ }
+      lastErr = gemErrMsg(res.status, em) + (em ? "\n" + em : "");
+      if (res.status === 429) {
+        exhausted.set(m, Date.now() + (/per ?day|PerDay/i.test(em) ? 3_600_000 : 90_000));
+        break;
+      }
+      if (RETRYABLE(res.status) && attempt === 0) {
+        await sleep(800);
+        continue;
+      }
+      if (res.status === 404 || RETRYABLE(res.status)) break;
+      throw new Error(lastErr); // 400/401/403: مشكلة في المفتاح أو الطلب نفسه، لا فائدة من التبديل
+    }
+  }
+  throw new Error(lastErr || "كل النماذج المتاحة مشغولة أو استنفدت حصتها — أعد المحاولة لاحقاً.");
+}
+
 // يقرأ أحداث SSE من Gemini ويعيد كل حدث JSON
 async function* gemEvents(body: ReadableStream<Uint8Array>): AsyncGenerator<any> {
   const rd = body.getReader();
@@ -287,94 +348,38 @@ async function runSingle(
   };
   if (mode === "search") payload.tools = [{ googleSearch: {} }];
 
-  // محاولتان بالنموذج المطلوب ثم نموذج احتياطي؛ كل محاولة بمهلة لبداية الرد (الأسوأ ≈ 75 ثانية < حد 150)
-  const fb = Deno.env.get("GEMINI_FALLBACK_MODEL") || GEM_FALLBACK;
-  const plan: string[] = [model, model];
-  if (fb && fb !== model) plan.push(fb);
-
   return sseResponse(async (send, signal) => {
-    let primaryErr = "";
-    for (let i = 0; i < plan.length; i++) {
-      if (signal.aborted) return;
-      if (i > 0) send({ t: "status", m: i === 2 ? "🔁 أجرّب نموذجاً احتياطياً…" : "🔁 أعيد المحاولة…" });
-
-      let up: Response;
-      try {
-        up = await gemFetch(plan[i], "streamGenerateContent", payload, key, signal, headerMs());
-      } catch {
-        if (signal.aborted) return;
-        if (i < 2) primaryErr = "تأخّر Gemini في الاستجابة (ضغط على الخدمة) — أعد المحاولة بعد قليل.";
-        if (i < plan.length - 1) {
-          await sleep(1000);
-          continue;
-        }
-        throw new Error(primaryErr || "تأخّر Gemini في الاستجابة — أعد المحاولة بعد قليل.");
+    const { res, model: used } = await gemPick("streamGenerateContent", payload, key, signal, model, headerMs(), (m) => send({ t: "status", m }));
+    const sources = new Map<string, Src>();
+    let got = false;
+    let finish = "";
+    for await (const ev of gemEvents(res.body!)) {
+      const br = blockReason(ev);
+      if (br) throw new Error("حجبت Google الطلب لأسباب تتعلق بالسلامة (" + br + ") — أعد صياغة السؤال.");
+      const t = evText(ev);
+      if (t) {
+        got = true;
+        send({ t: "delta", m: t });
       }
-
-      if (!up.ok || !up.body) {
-        let m = "";
-        try {
-          const j = await up.json();
-          m = (j && j.error && j.error.message) || "";
-        } catch { /* ignore */ }
-        const msg = gemErrMsg(up.status, m) + (m ? "\n" + m : "");
-        if (i < 2) primaryErr = msg;
-        if (RETRYABLE(up.status) && i < plan.length - 1) {
-          await sleep(1500);
-          continue;
-        }
-        // النموذج الاحتياطي غير موجود (404): الخطأ المفيد هو خطأ النموذج الأصلي لا هذا
-        throw new Error(i === 2 && up.status === 404 && primaryErr ? primaryErr : msg);
-      }
-
-      const sources = new Map<string, Src>();
-      let got = false;
-      let finish = "";
-      for await (const ev of gemEvents(up.body)) {
-        const br = blockReason(ev);
-        if (br) throw new Error("حجبت Google الطلب لأسباب تتعلق بالسلامة (" + br + ") — أعد صياغة السؤال.");
-        const t = evText(ev);
-        if (t) {
-          got = true;
-          send({ t: "delta", m: t });
-        }
-        collectSources(ev, sources);
-        const fr = ev?.candidates?.[0]?.finishReason;
-        if (fr) finish = String(fr);
-      }
-      if (!got && finish && finish !== "STOP" && finish !== "MAX_TOKENS") {
-        throw new Error("لم يُنتج Gemini ردّاً (" + finish + ") — أعد صياغة السؤال.");
-      }
-      if (finish === "MAX_TOKENS") send({ t: "delta", m: "\n\n(انقطع الرد لبلوغ الحد الأقصى للطول.)" });
-      if (sources.size) send({ t: "sources", m: [...sources.values()] });
-      return;
+      collectSources(ev, sources);
+      const fr = ev?.candidates?.[0]?.finishReason;
+      if (fr) finish = String(fr);
     }
+    if (!got && finish && finish !== "STOP" && finish !== "MAX_TOKENS") {
+      throw new Error("لم يُنتج Gemini رداً (" + finish + ") — أعد صياغة السؤال.");
+    }
+    if (finish === "MAX_TOKENS") send({ t: "delta", m: "\n\n(انقطع الرد لبلوغ الحد الأقصى للطول.)" });
+    if (sources.size) send({ t: "sources", m: [...sources.values()] });
+    send({ t: "status", m: "✓ " + used });
   });
 }
 
-// ---------- بحث عميق: تخطيط ← عدة عمليات بحث متوازية ← تقرير ----------
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 // طلب غير مبثوث مع إعادة محاولة واحدة عند 429/5xx
 async function gemOnce(model: string, payload: unknown, key: string, signal: AbortSignal): Promise<any> {
-  let last = "";
-  for (let attempt = 0; attempt < 2; attempt++) {
-    if (signal.aborted) throw new Error("أُلغي الطلب.");
-    const res = await gemFetch(model, "generateContent", payload, key, AbortSignal.any([signal, AbortSignal.timeout(70_000)]));
-    if (res.ok) return await res.json();
-    let m = "";
-    try {
-      const j = await res.json();
-      m = (j && j.error && j.error.message) || "";
-    } catch { /* ignore */ }
-    last = gemErrMsg(res.status, m);
-    if (res.status === 429 || res.status >= 500) {
-      await sleep(2500 * (attempt + 1));
-      continue;
-    }
-    break;
-  }
-  throw new Error(last || "تعذّر إكمال الطلب.");
+  const { res } = await gemPick("generateContent", payload, key, signal, model, 60_000);
+  return await res.json();
 }
 
 function jsonQueries(raw: string): string[] {
@@ -445,23 +450,15 @@ async function runDeep(s: Subject, model: string, key: string): Promise<Response
     const srcTxt = list.length
       ? list.map((x, i) => "[" + (i + 1) + "] " + x.title + " — " + x.uri).join("\n")
       : "(لم تُرجع الأداة روابط محددة)";
-    const res = await gemFetch(model, "streamGenerateContent", {
+    const { res } = await gemPick("streamGenerateContent", {
       systemInstruction: { parts: [{ text: SYNTH_SYS }] },
       contents: userContent(
         subject + "\n\n===== الملاحظات المجمّعة =====\n" + notesTxt + "\n\n===== قائمة المصادر =====\n" + srcTxt,
       ),
       generationConfig: { maxOutputTokens: 6144, temperature: 0.3 },
-    }, key, signal, 40_000);
-    if (!res.ok || !res.body) {
-      let m = "";
-      try {
-        const j = await res.json();
-        m = (j && j.error && j.error.message) || "";
-      } catch { /* ignore */ }
-      throw new Error(gemErrMsg(res.status, m));
-    }
+    }, key, signal, model, 40_000, (m) => send({ t: "status", m }));
     let finish = "";
-    for await (const ev of gemEvents(res.body)) {
+    for await (const ev of gemEvents(res.body!)) {
       const br = blockReason(ev);
       if (br) throw new Error("حجبت Google الطلب لأسباب تتعلق بالسلامة (" + br + ").");
       const t = evText(ev);
@@ -503,11 +500,10 @@ async function handleGemini(body: Record<string, unknown>): Promise<Response> {
     const model = gemModel(body.model, false);
     let up: Response;
     try {
-      up = await gemFetch(model, "streamGenerateContent", payload, key, undefined, 40_000);
-    } catch {
-      return json({ error: "تأخّر Gemini في الاستجابة أو تعذّر الوصول إليه — أعد المحاولة بعد قليل." }, 504);
+      up = (await gemPick("streamGenerateContent", payload, key, new AbortController().signal, model, 40_000)).res;
+    } catch (e) {
+      return json({ error: errText(e) }, 503);
     }
-    // نمرّر الرد كما هو (بثّ SSE عند النجاح، أو JSON الخطأ كما أرسلته Google)
     return new Response(up.body, {
       status: up.status,
       headers: {
