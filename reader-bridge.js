@@ -500,14 +500,22 @@ async function readPassage(a){
 }
 
 
-/* ---------- تصدير سياق كنص واحد يُلصق في تطبيق Claude (بلا API) ---------- */
-function exportHeader(){
+/* ---------- تجهيز سياق دراسة قابل للمشاركة مع Manus أو نسخه يدوياً ---------- */
+function exportHeader(readerId, sourceUrl){
+  var selected = readerId ? allReaders().filter(function(r){ return r.id === readerId; })[0] : null;
+  var source = '';
+  try{
+    var u = new URL(String(sourceUrl || ''));
+    if(u.protocol === 'https:') source = u.origin + u.pathname;
+  }catch(e){}
   return [
-    '# سياق من موقعي «القوارئ العشر»',
-    'هذه بيانات قراءتي وبحثي من مكتبتي، منسوخة من الموقع. «pid» هو رقم الفقرة كما يظهر في القارئ.',
-    'اعتمد عليها وحدها فيما تنقله عن المصادر، ولا تخترع اقتباساً أو رقم فقرة غير مذكور هنا، وإن كان ما أحتاجه غير موجود فقل ذلك.',
-    'النصوص الأصلية في المكتبة إنجليزية ويونانية ولاتينية وفرنسية في معظمها؛ اشرح لي بالعربية مع إبقاء المصطلحات الفنية بين قوسين.'
-  ].join('\n');
+    '# حزمة دراسة من موقع «القوارئ العشر» — جاهزة للمشاركة مع Manus',
+    'هذه بيانات قراءة وبحث اختار المستخدم تضمينها من مكتبته. «pid» هو رقم الفقرة كما يظهر في القارئ.',
+    'القارئ المحدد: ' + (selected ? selected.title : 'كل القوارئ'),
+    source ? 'رابط المكتبة: ' + source : '',
+    'اعتمد على هذه الحزمة في نقل ما تقوله النصوص، ولا تخترع اقتباساً أو رقم فقرة غير مذكور. إذا كانت المعلومة المطلوبة غير موجودة، فاذكر ذلك بوضوح.',
+    'النصوص الأصلية في المكتبة إنجليزية ويونانية ولاتينية وفرنسية في معظمها؛ أجب بالعربية وأبقِ المصطلحات الفنية بين قوسين.'
+  ].filter(Boolean).join('\n');
 }
 function loc(it){
   var parts = [it.reader_title, it.book].filter(Boolean);
@@ -567,7 +575,7 @@ async function exportText(o){
     }
   }
 
-  var head = exportHeader();
+  var head = exportHeader(reader, o.sourceUrl);
   var tail = question ? '\n\n## سؤالي\n' + question : '';
   var rem = maxChars - head.length - tail.length - 200;
   var out = [head], truncated = false;
