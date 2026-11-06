@@ -12,9 +12,11 @@
 //   OPENROUTER_ALLOW_PAID  اختياري: اجعله 1 للسماح بكل النماذج المدفوعة. الأصل: المسموح فقط وسم :free أو openrouter/free،
 //                          فلا يستطيع أحد استهلاك رصيدك حتى لو وضعت فيه مالاً.
 //   GEMINI_API_KEY         مفتاح Google AI Studio — لازم لاستعمال Gemini (المحادثة + أزرار شرح/بحث/بحث عميق في القوارئ)
-//   GEMINI_MODEL           اختياري: نموذج Gemini الافتراضي (الأصل gemini-3.8-flash)
+//   GEMINI_MODEL           اختياري: النموذج الأول في السلسلة (الأصل gemini-3.8-flash)
 //   GEMINI_DEEP_MODEL      اختياري: نموذج مستقل للبحث العميق (الأصل = GEMINI_MODEL)
-//   GEMINI_FALLBACK_MODEL  اختياري: نموذج احتياطي يُجرَّب إذا انشغلت Google أو تأخّرت (الأصل gemini-2.5-flash)
+//   GEMINI_CHAIN           اختياري: سلسلة نماذج مفصولة بفاصلة من الأعلى إلى الأقل (تُجرَّب بالترتيب عند نفاد الحصة أو التعثر)
+//   GEMINI_HEADER_MS       اختياري: مهلة بداية الرد (الأصل 25000)
+//   الدالة تكتشف تلقائياً النماذج المتاحة فعلاً لمفتاحك وتتخطّى المحذوف منها (مثل gemini-2.5-flash-lite لدى المستخدمين الجدد).
 //
 // مهم: عند نشر الدالة عطّل خيار «Verify JWT» لهذه الدالة، فالحماية هنا بكلمة المرور أعلاه.
 // بدون كلمة المرور لا يستطيع أحد استعمال رصيدك حتى لو عرف عنوان الدالة.
@@ -113,11 +115,13 @@ async function gemFetch(
 }
 
 const RETRYABLE = (st: number) => st === 429 || st === 500 || st === 502 || st === 503 || st === 504;
-const GEM_FALLBACK = "gemini-2.5-flash";
 const headerMs = () => Number(Deno.env.get("GEMINI_HEADER_MS")) || 25_000;
 
 // سلسلة النماذج: من الأعلى جودةً إلى الأقل. إن نفدت حصة نموذج أو تعذّر انتقلنا تلقائياً إلى التالي.
-const CHAIN_DEFAULT = ["gemini-3.8-flash", "gemini-3.5-flash", "gemini-2.5-flash", "gemini-flash-lite-latest", "gemini-2.5-flash-lite"];
+const CHAIN_DEFAULT = [
+  "gemini-3.8-flash", "gemini-3.5-flash", "gemini-3.5-flash-lite",
+  "gemini-flash-latest", "gemini-2.5-flash", "gemini-flash-lite-latest", "gemini-2.5-flash-lite",
+];
 const exhausted = new Map<string, number>(); // نموذج → وقت (ms) يُعاد بعده تجربته
 function chainFor(first: string): string[] {
   const env = (Deno.env.get("GEMINI_CHAIN") || "").split(",").map((x) => x.trim())
@@ -125,6 +129,47 @@ function chainFor(first: string): string[] {
   const base = env.length ? env : CHAIN_DEFAULT;
   const i = base.indexOf(first);
   return i >= 0 ? base.slice(i) : [first, ...base];
+}
+
+// النماذج المتاحة فعلاً لهذا المفتاح (تتغير: Google توقف نماذج قديمة عن المستخدمين الجدد). تُخزَّن 30 دقيقة.
+let availCache: { at: number; names: string[] } | null = null;
+async function availableModels(key: string): Promise<string[] | null> {
+  if (availCache && Date.now() - availCache.at < 1_800_000) return availCache.names;
+  try {
+    const r = await fetch("https://generativelanguage.googleapis.com/v1beta/models?pageSize=200", {
+      headers: { "x-goog-api-key": key },
+      signal: AbortSignal.timeout(6_000),
+    });
+    if (!r.ok) return availCache?.names ?? null;
+    const j = await r.json();
+    const names = (j.models || [])
+      .filter((m: any) => !Array.isArray(m.supportedGenerationMethods) || m.supportedGenerationMethods.includes("generateContent"))
+      .map((m: any) => String(m.name || "").replace("models/", ""))
+      .filter((n: string) => /^gemini-/.test(n) && !/embedding|image|tts|live|audio|robotics|computer-use|learnlm/.test(n));
+    if (!names.length) return availCache?.names ?? null;
+    availCache = { at: Date.now(), names };
+    return names;
+  } catch {
+    return availCache?.names ?? null;
+  }
+}
+// يرتّب النماذج المتاحة من الأحدث: رقم الإصدار الأكبر أولاً، ثم flash قبل lite
+function verOf(n: string): number {
+  const m = n.match(/gemini-(\d+(?:\.\d+)?)/);
+  return m ? parseFloat(m[1]) : 0;
+}
+// السلسلة النهائية: السلسلة المعتادة مصفّاة بما هو متاح فعلاً؛ فإن لم يبقَ منها شيء نأخذ أحدث نماذج flash المتاحة
+async function resolveChain(first: string, key: string): Promise<string[]> {
+  const wanted = chainFor(first);
+  const avail = await availableModels(key);
+  if (!avail) return wanted;
+  const set = new Set(avail);
+  const ok = wanted.filter((m) => set.has(m));
+  const extra = avail
+    .filter((n) => /flash/.test(n) && !/preview|exp|thinking/.test(n) && !ok.includes(n))
+    .sort((a, b) => verOf(b) - verOf(a) || (/lite/.test(a) ? 1 : 0) - (/lite/.test(b) ? 1 : 0))
+    .slice(0, 4);
+  return ok.length ? [...ok, ...extra.filter((n) => verOf(n) >= 2.5).slice(0, 2)] : extra;
 }
 type Pick = { res: Response; model: string };
 // يجرّب النماذج بالترتيب حتى يحصل على ردّ ناجح. 429 = نفدت حصة هذا النموذج فننتقل فوراً.
@@ -138,9 +183,10 @@ async function gemPick(
   note?: (m: string) => void,
 ): Promise<Pick> {
   const t0 = Date.now();
-  const chain = chainFor(first);
+  const chain = await resolveChain(first, key);
   let lastErr = "";
   let tried = 0;
+  const log: string[] = []; // ما جُرّب فعلاً: «نموذج (حالة)» — يظهر في رسالة الخطأ النهائية
   for (let ci = 0; ci < chain.length; ci++) {
     const m = chain[ci];
     if ((exhausted.get(m) || 0) > Date.now()) continue;
@@ -154,6 +200,7 @@ async function gemPick(
       } catch {
         if (signal.aborted) throw new Error("أُلغي الطلب.");
         lastErr = "تأخّر Gemini في الاستجابة — أعد المحاولة بعد قليل.";
+        log.push(m + " (لا ردّ)");
         break; // نموذج لا يردّ: ننتقل للتالي مباشرة
       }
       if (res.ok && (res.body || method === "generateContent")) return { res, model: m };
@@ -162,6 +209,8 @@ async function gemPick(
         em = (await res.json())?.error?.message || "";
       } catch { /* ignore */ }
       lastErr = gemErrMsg(res.status, em) + (em ? "\n" + em : "");
+      if (!log.some((x) => x.startsWith(m + " "))) log.push(m + " (" + res.status + ")");
+      if (res.status === 404) exhausted.set(m, Date.now() + 6 * 3_600_000); // محذوف/غير متاح لهذا المفتاح: لا نعيد تجربته ست ساعات
       if (res.status === 429) {
         exhausted.set(m, Date.now() + (/per ?day|PerDay/i.test(em) ? 3_600_000 : 90_000));
         break;
@@ -174,7 +223,8 @@ async function gemPick(
       throw new Error(lastErr); // 400/401/403: مشكلة في المفتاح أو الطلب نفسه، لا فائدة من التبديل
     }
   }
-  throw new Error(lastErr || "كل النماذج المتاحة مشغولة أو استنفدت حصتها — أعد المحاولة لاحقاً.");
+  const tail = log.length ? "\n\nجُرّب: " + log.join("، ") : "";
+  throw new Error((lastErr || "كل النماذج المتاحة مشغولة أو استنفدت حصتها — أعد المحاولة لاحقاً.") + tail);
 }
 
 // يقرأ أحداث SSE من Gemini ويعيد كل حدث JSON
@@ -517,7 +567,7 @@ async function handleGemini(body: Record<string, unknown>): Promise<Response> {
   // فحص: هل يصل الخادم إلى Google وهل المفتاح صالح وما النماذج المتاحة وهل يردّ النموذج المختار
   if (body.mode === "ping") {
     const model = gemModel(body.model, false);
-    const out: Record<string, unknown> = { model, fallback: Deno.env.get("GEMINI_FALLBACK_MODEL") || GEM_FALLBACK };
+    const out: Record<string, unknown> = { model, chain: await resolveChain(model, key) };
     const t0 = Date.now();
     try {
       const r = await fetch("https://generativelanguage.googleapis.com/v1beta/models?pageSize=200", {
