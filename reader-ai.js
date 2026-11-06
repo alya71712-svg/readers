@@ -221,7 +221,9 @@ function buildOverlay(){
     onkeydown:function(e){ if(e.key==='Enter'){ e.preventDefault(); rerun(run?run.mode:'explain'); } }});
   function fbtn(t,mode){ return mk('button',{type:'button',class:'tbtn',text:t,onclick:function(){ rerun(mode); }}); }
   els.copy=mk('button',{type:'button',class:'tbtn',text:'📋 نسخ',onclick:copyOut});
-  var ft=mk('div',{id:'rai-ft'},[els.q,provSelect('ai-sel'),fbtn('💡','explain'),fbtn('🔎','search'),fbtn('🔬','deep'),els.copy]);
+  els.share=mk('button',{type:'button',class:'tbtn',text:'📤 مشاركة',onclick:shareOut,
+    title:'مشاركة النص والجواب والمصادر عبر أي تطبيق على الجهاز'});
+  var ft=mk('div',{id:'rai-ft'},[els.q,provSelect('ai-sel'),fbtn('💡','explain'),fbtn('🔎','search'),fbtn('🔬','deep'),els.share,els.copy]);
   var hd=mk('div',{id:'rai-hd'},[els.ttl,els.stop,close]);
   ov=mk('div',{id:'rai-ov',translate:'no',lang:'ar',dir:'rtl',role:'dialog','aria-modal':'true'},[hd,els.bd,ft]);
   document.body.appendChild(ov);
@@ -299,6 +301,53 @@ function openSettings(then){
   els.sUrl.value=c.url; els.sPass.value=c.pass; els.sModel.value=lsGet(K_MODEL)||''; els.sOModel.value=lsGet(K_OMODEL)||''; els.sMsg.textContent='';
   settingsThen=then||null;
   $('rai-set').classList.add('show');
+}
+
+/* ---------- المشاركة عبر التطبيقات (قائمة المشاركة في الجهاز) ---------- */
+// نص جاهز للصق في أي تطبيق أو نموذج: بيانات المرجع + النص المحدد (+ الجواب والمصادر إن وُجدت)
+function shareText(s,answer,sources,q){
+  var L=[];
+  var ref=[];
+  if(s.book) ref.push('الكتاب: '+s.book);
+  if(s.author) ref.push('المؤلف: '+s.author);
+  if(s.pid) ref.push('الفقرة: '+s.pid);
+  if(ref.length) L.push(ref.join(' — '));
+  if(s.text) L.push('«'+s.text+'»');
+  if(q) L.push('سؤالي: '+q);
+  if(answer) L.push('— الجواب —\n'+answer);
+  if(sources) L.push('المصادر:\n'+sources);
+  L.push('(من القوارئ العشر: https://alya71712-svg.github.io/readers/)');
+  return L.join('\n\n');
+}
+function doShare(title,text){
+  function fallback(){
+    copyText(text);
+    toast('✓ نُسخ النص — الصقه في أي تطبيق (المشاركة المباشرة غير متاحة في هذا المتصفح)');
+  }
+  if(typeof navigator.share!=='function'){ fallback(); return; }
+  var p; try{ p=navigator.share({title:title,text:text}); }catch(e){ fallback(); return; }
+  if(p&&p.catch) p.catch(function(e){ if(e&&e.name!=='AbortError') fallback(); });
+}
+function copyText(t){
+  try{ navigator.clipboard.writeText(t).catch(function(){ fallbackCopy(t); }); }catch(e){ fallbackCopy(t); }
+}
+// من نافذة النتيجة: يشارك النص + الجواب + المصادر
+function shareOut(){
+  var s=snap||{text:'',book:'',author:'',pid:''};
+  var ans=(els.out&&(els.out.innerText||els.out.textContent)||'').trim();
+  var src='';
+  if(els.src&&els.src.style.display!=='none'){
+    src=Array.prototype.map.call(els.src.querySelectorAll('a'),function(a,i){ return (i+1)+'. '+a.textContent.trim()+' — '+a.href; }).join('\n');
+  }
+  var q=els.q?els.q.value.trim():'';
+  doShare('من القوارئ العشر'+(s.book?' — '+s.book:''),shareText(s,ans,src,q));
+}
+// من اللوحة العلوية: يشارك النص المحدد مع مرجعه مباشرة دون استدعاء أي نموذج
+function shareSelection(){
+  var s=takeSnapshot();
+  if(!s){ toast('حدّد نصاً في الكتاب أولاً ثم اضغط الزر.'); return; }
+  snap=s;
+  doShare('من القوارئ العشر'+(s.book?' — '+s.book:''),shareText(s,'','',''));
 }
 
 /* ---------- التشغيل ---------- */
@@ -606,6 +655,7 @@ function installBar(){
 
   // ٣) أزرار الذكاء في نفس الحاوية (آخرها): اختيار المحرك ثم شرح/بحث/بحث عميق/إعدادات
   tb1.appendChild(provSelect('ai-sel'));
+  tb1.appendChild(b('📤 مشاركة','مشاركة النص المحدد مع مرجعه (الكتاب والفقرة) عبر أي تطبيق أو نموذج على جهازك',function(){ shareSelection(); }));
   tb1.appendChild(b('⚙','إعدادات شريط الذكاء (رابط الدالة وكلمة المرور والنماذج)',function(){ openSettings(); }));
   tb1.appendChild(b('💡 شرح','يشرح النص المحدد',function(){ start('explain'); }));
   tb1.appendChild(b('🔎 بحث','بحث بالنص المحدد (Gemini: على الويب مع مصادر — المجاني: من معرفة النموذج)',function(){ start('search'); }));
