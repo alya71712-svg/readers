@@ -4677,7 +4677,8 @@ function init(){
   }
   if(library.length > 0){ collapseSBIfNarrow(false); showBook(startIdx); }
   renderBM(); renderNotes(); renderSavedThemes();
-  setupImmersiveTap('cw1'); setupImmersiveTap('cw2');
+  // معطّل: تبديل ملء الشاشة بلمسة النص كان يُظهر رسالة Chrome السفلية عند كل دخول (لا يمكن إخفاؤها من الكود). لإعادته أزل علامة التعليق.
+  // setupImmersiveTap('cw1'); setupImmersiveTap('cw2');
   if(restored && (bookmarks.length || notes.length || Object.keys(readingPosition).length)){
     toast('✓ تم استرجاع موضع قراءتك وإشاراتك تلقائياً من هذا المتصفح');
   }
