@@ -194,7 +194,15 @@ var CSS=[
 '#rai-set label{display:block;margin:10px 0 3px;font-size:13px;font-family:sans-serif;color:var(--text2,#555)}',
 '#rai-set input{width:100%;box-sizing:border-box;padding:9px;font-size:14px;border:1px solid var(--border,#ccc);border-radius:4px;background:var(--bg2,#eee);color:var(--text,#111);direction:ltr}',
 '#rai-set .row{display:flex;gap:8px;margin-top:14px}#rai-set .row .tbtn{flex:1;min-height:40px}',
-'#rai-set .hint{font-size:12px;color:var(--text2,#555);font-family:sans-serif;margin-top:8px;line-height:1.6}'
+'#rai-set .hint{font-size:12px;color:var(--text2,#555);font-family:sans-serif;margin-top:8px;line-height:1.6}',
+/* --- نافذة المشاركة من اللوحة العلوية: معاينة النص + سطر لسؤال إضافي --- */
+'#rai-sh{position:fixed;inset:0;z-index:10000;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.55);direction:rtl}',
+'#rai-sh.show{display:flex}',
+'#rai-sh .box{background:var(--bg,#fff);color:var(--text,#111);border:1px solid var(--border,#ccc);border-radius:8px;padding:14px;width:min(92vw,440px);max-height:90vh;overflow:auto}',
+'#rai-sh-q{border-inline-start:3px solid var(--gold,#a80);padding:6px 10px;margin:10px 0;color:var(--text2,#555);font-size:14px;max-height:6.8em;overflow:hidden;line-height:1.7}',
+'#rai-sh label{display:block;margin:10px 0 3px;font-size:13px;font-family:sans-serif;color:var(--text2,#555)}',
+'#rai-sh-in{width:100%;box-sizing:border-box;padding:10px;font-size:16px;border:1px solid var(--border,#ccc);border-radius:4px;background:var(--bg2,#eee);color:var(--text,#111);font-family:inherit}',
+'#rai-sh .row{display:flex;gap:8px;margin-top:14px}#rai-sh .row .tbtn{flex:1;min-height:42px;font-size:15px}'
 ].join('\n');
 
 var ov, els={}, run=null; // run = {ac, mode, snap}
@@ -347,7 +355,46 @@ function shareSelection(){
   var s=takeSnapshot();
   if(!s){ toast('حدّد نصاً في الكتاب أولاً ثم اضغط الزر.'); return; }
   snap=s;
-  doShare('من القوارئ العشر'+(s.book?' — '+s.book:''),shareText(s,'','',''));
+  openShareSheet(s);
+}
+// نافذة صغيرة: معاينة النص المحدد + سطر لسؤال إضافي (اختياري) يُلحَق بالنص المُشارَك
+var sh=null, shEls={}, shSnap=null;
+function buildShareSheet(){
+  if(sh) return;
+  injectCss();
+  shEls.quote=mk('div',{id:'rai-sh-q'});
+  shEls.q=mk('input',{id:'rai-sh-in',type:'text',placeholder:'اكتب سؤالك هنا (اختياري)…',enterkeyhint:'send',autocomplete:'off',
+    onkeydown:function(e){ if(e.key==='Enter'){ e.preventDefault(); sendShareSheet(false); } }});
+  var go=mk('button',{type:'button',class:'tbtn',text:'📤 مشاركة',onclick:function(){ sendShareSheet(false); }});
+  var cp=mk('button',{type:'button',class:'tbtn',text:'📋 نسخ',onclick:function(){ sendShareSheet(true); }});
+  var cancel=mk('button',{type:'button',class:'tbtn',text:'إلغاء',onclick:closeShareSheet});
+  var box=mk('div',{class:'box'},[
+    mk('div',{text:'📤 مشاركة النص المحدد',style:'font-weight:700;font-size:15px'}),
+    shEls.quote,
+    mk('label',{text:'سؤال إضافي (اختياري) — يُضاف إلى النص المُشارَك'}),shEls.q,
+    mk('div',{class:'row'},[go,cp,cancel])
+  ]);
+  sh=mk('div',{id:'rai-sh',translate:'no',dir:'rtl',role:'dialog','aria-modal':'true',
+    onclick:function(e){ if(e.target===sh) closeShareSheet(); }},[box]);
+  document.body.appendChild(sh);
+}
+function openShareSheet(s){
+  buildShareSheet();
+  shSnap=s;
+  var t=(s.text||'').replace(/\s+/g,' ').trim();
+  shEls.quote.textContent=(s.book?s.book+(s.pid?' — فقرة '+s.pid:'')+'\n':'')+(t.length>180?t.slice(0,180)+'…':t);
+  shEls.quote.style.whiteSpace='pre-line';
+  shEls.q.value='';
+  sh.classList.add('show');
+}
+function closeShareSheet(){ if(sh) sh.classList.remove('show'); }
+function sendShareSheet(copyOnly){
+  var s=shSnap; if(!s){ closeShareSheet(); return; }
+  var q=shEls.q.value.trim();
+  var text=shareText(s,'','',q);
+  closeShareSheet();
+  if(copyOnly){ copyText(text); toast('✓ نُسخ النص — الصقه في أي تطبيق'); return; }
+  doShare('من القوارئ العشر'+(s.book?' — '+s.book:''),text);
 }
 
 /* ---------- التشغيل ---------- */
@@ -655,7 +702,7 @@ function installBar(){
 
   // ٣) أزرار الذكاء في نفس الحاوية (آخرها): اختيار المحرك ثم شرح/بحث/بحث عميق/إعدادات
   tb1.appendChild(provSelect('ai-sel'));
-  tb1.appendChild(b('📤 مشاركة','مشاركة النص المحدد مع مرجعه (الكتاب والفقرة) عبر أي تطبيق أو نموذج على جهازك',function(){ shareSelection(); }));
+  tb1.appendChild(b('📤 مشاركة','مشاركة النص المحدد مع مرجعه (الكتاب والفقرة) وسؤال إضافي اختياري عبر أي تطبيق أو نموذج على جهازك',function(){ shareSelection(); }));
   tb1.appendChild(b('⚙','إعدادات شريط الذكاء (رابط الدالة وكلمة المرور والنماذج)',function(){ openSettings(); }));
   tb1.appendChild(b('💡 شرح','يشرح النص المحدد',function(){ start('explain'); }));
   tb1.appendChild(b('🔎 بحث','بحث بالنص المحدد (Gemini: على الويب مع مصادر — المجاني: من معرفة النموذج)',function(){ start('search'); }));
@@ -666,7 +713,7 @@ function installBar(){
 
 function init(){
   // نسخة قارئ محفوظة قد تحمل نافذة/أنماط نسخة سابقة بلا مستمعين: نحذفها فتُبنى من جديد
-  Array.prototype.forEach.call(document.querySelectorAll('#rai-ov, #rai-set, #rai-style'),function(el){ if(el.parentNode) el.parentNode.removeChild(el); });
+  Array.prototype.forEach.call(document.querySelectorAll('#rai-ov, #rai-set, #rai-sh, #rai-style'),function(el){ if(el.parentNode) el.parentNode.removeChild(el); });
   injectCss();
   if(!installBar()){
     // القارئ يبني الشريط عند التحميل؛ نعيد المحاولة قليلاً
