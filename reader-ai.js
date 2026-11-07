@@ -199,7 +199,7 @@ var CSS=[
 '#rai-sh{position:fixed;inset:0;z-index:10000;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.55);direction:rtl}',
 '#rai-sh.show{display:flex}',
 '#rai-sh .box{background:var(--bg,#fff);color:var(--text,#111);border:1px solid var(--border,#ccc);border-radius:8px;padding:14px;width:min(92vw,440px);max-height:90vh;overflow:auto}',
-'#rai-sh-q{border-inline-start:3px solid var(--gold,#a80);padding:6px 10px;margin:10px 0;color:var(--text2,#555);font-size:14px;max-height:6.8em;overflow:hidden;line-height:1.7}',
+'#rai-sh-q{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;border-inline-start:3px solid var(--gold,#a80);padding:6px 10px;margin:10px 0;color:var(--text2,#555);font-size:14px;max-height:6.8em;overflow:hidden;line-height:1.7}',
 '#rai-sh label{display:block;margin:10px 0 3px;font-size:13px;font-family:sans-serif;color:var(--text2,#555)}',
 '#rai-sh-in{width:100%;box-sizing:border-box;padding:10px;font-size:16px;border:1px solid var(--border,#ccc);border-radius:4px;background:var(--bg2,#eee);color:var(--text,#111);font-family:inherit}',
 '#rai-sh .row{display:flex;gap:8px;margin-top:14px}#rai-sh .row .tbtn{flex:1;min-height:42px;font-size:15px}'
@@ -378,6 +378,14 @@ function buildShareSheet(){
     onclick:function(e){ if(e.target===sh) closeShareSheet(); }},[box]);
   document.body.appendChild(sh);
 }
+// تحديد النص ما زال حياً في الصفحة فيرسم كروم فوق النافذة قائمته الأصلية (نسخ/تحديد الكل…) ومقبضَي التحديد؛
+// النص محفوظ في اللقطة s أصلاً، فنُلغي التحديد الحي (ونكرّر بعد لحظة لأن قائمة كروم تُرسم متأخرة)
+function clearLiveSelection(){
+  if(!sh||!sh.classList.contains('show')) return;            // أُغلقت النافذة: لا نلمس تحديداً جديداً للمستخدم
+  if(document.activeElement&&document.activeElement.id==='rai-sh-in') return; // يكتب سؤاله: لا نقاطعه
+  try{ var a=document.activeElement; if(a&&a!==document.body&&a.blur&&a.id!=='rai-sh-in') a.blur(); }catch(e){}
+  try{ var g=window.getSelection&&window.getSelection(); if(g&&g.removeAllRanges) g.removeAllRanges(); }catch(e){}
+}
 function openShareSheet(s){
   buildShareSheet();
   shSnap=s;
@@ -386,6 +394,7 @@ function openShareSheet(s){
   shEls.quote.style.whiteSpace='pre-line';
   shEls.q.value='';
   sh.classList.add('show');
+  clearLiveSelection(); setTimeout(clearLiveSelection,120); setTimeout(clearLiveSelection,400);
 }
 function closeShareSheet(){ if(sh) sh.classList.remove('show'); }
 function sendShareSheet(copyOnly){
