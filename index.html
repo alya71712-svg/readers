@@ -69,10 +69,10 @@ button.ghost{background:var(--soft);color:var(--accent);border:1px solid color-m
 .panel-heading{display:flex;align-items:center;justify-content:space-between;margin-bottom:11px}
 .panel-heading h3{margin:0;font-size:16px}
 .panel-toggle{position:absolute;top:11px;right:-1px;transform:translateX(100%);width:38px;height:38px;padding:0;border-radius:0 11px 11px 0;display:grid;place-items:center;background:var(--accent);font-size:18px}
-.nav-grid{display:grid;grid-template-columns:1fr;gap:7px}
-.nav-btn{width:100%;display:flex;align-items:center;gap:10px;justify-content:flex-start;margin:0;background:transparent;color:var(--ink);border:1px solid var(--line)}
+.nav-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
+.nav-btn{width:100%;min-width:0;display:flex;align-items:center;gap:5px;justify-content:center;margin:0;padding:9px 6px;font-size:13px;line-height:1.3;text-align:center;text-decoration:none;white-space:nowrap;background:transparent;color:var(--ink);border:1px solid var(--line)}
 .nav-btn:hover{background:var(--soft);color:var(--accent);border-color:color-mix(in srgb,var(--accent) 40%,var(--line))}
-.nav-icon{font-size:18px;width:24px;text-align:center}
+.nav-icon{font-size:16px;flex:none;text-align:center}
 .panel-note{font-size:12px;line-height:1.7;color:var(--muted);border-top:1px solid var(--line);margin-top:14px;padding-top:12px}
 .modal-backdrop{position:fixed;inset:0;background:rgba(15,23,42,.45);display:none;align-items:center;justify-content:center;padding:18px;z-index:20}
 .modal-backdrop.open{display:flex}
@@ -171,14 +171,14 @@ body.panel-hidden .panel-toggle{position:fixed;right:0;top:50%;transform:transla
       <aside class="control-panel" id="controlPanel">
         <div class="panel-heading"><h3>لوحة التحكم</h3><span>☰</span></div>
         <div class="nav-grid">
-          <button class="nav-btn" type="button" onclick="openThemes()"><span class="nav-icon">◐</span>السيمات</button>
-          <button class="nav-btn" type="button" onclick="openStats()"><span class="nav-icon">▦</span>إحصاءات المكتبة</button>
-          <button class="nav-btn" type="button" onclick="openAdd()"><span class="nav-icon">✎</span>كيف أضيف أو أغيّر قارئاً</button>
-          <button class="nav-btn" type="button" onclick="recheck()"><span class="nav-icon">⟳</span>إعادة فحص الملفات</button>
-          <button class="nav-btn" type="button" onclick="openCloud()"><span class="nav-icon">☁</span>المزامنة السحابية</button>
-          <button class="nav-btn" type="button" onclick="openChat()"><span class="nav-icon">💬</span>محادثة (نماذج مفتوحة أو Gemini أو Grok أو Claude)</button>
-          <button class="nav-btn" type="button" onclick="openExport()"><span class="nav-icon">📋</span>نسخ إلى Manus</button>
-          <a class="nav-btn" href="https://manus.im/" target="_blank" rel="noopener noreferrer" aria-label="افتح Manus في تبويب جديد للدراسة"><span class="nav-icon">↗</span>افتح Manus للدراسة</a>
+          <button class="nav-btn" type="button" onclick="openThemes()" title="السيمات"><span class="nav-icon">◐</span>السيمات</button>
+          <button class="nav-btn" type="button" onclick="openStats()" title="إحصاءات المكتبة"><span class="nav-icon">▦</span>إحصاءات</button>
+          <button class="nav-btn" type="button" onclick="openAdd()" title="كيف أضيف أو أغيّر قارئاً"><span class="nav-icon">✎</span>إضافة قارئ</button>
+          <button class="nav-btn" type="button" onclick="recheck()" title="إعادة فحص الملفات"><span class="nav-icon">⟳</span>فحص الملفات</button>
+          <button class="nav-btn" type="button" onclick="openCloud()" title="المزامنة السحابية"><span class="nav-icon">☁</span>المزامنة</button>
+          <button class="nav-btn" type="button" onclick="openChat()" title="محادثة (نماذج مفتوحة أو Gemini أو Grok أو Claude)"><span class="nav-icon">💬</span>محادثة</button>
+          <button class="nav-btn" type="button" onclick="openExport()" title="نسخ إلى Manus"><span class="nav-icon">📋</span>نسخ Manus</button>
+          <a class="nav-btn" href="https://manus.im/" target="_blank" rel="noopener noreferrer" title="افتح Manus للدراسة" aria-label="افتح Manus في تبويب جديد للدراسة"><span class="nav-icon">↗</span>فتح Manus</a>
         </div>
         <div class="panel-note">جهّز حزمة من تظليلك وملاحظاتك والمواضع أو فقرات الكتب، ثم شاركها إلى Manus من قائمة مشاركة الجهاز أو انسخها والصقها يدوياً. لا يحتاج هذا الربط مفتاح API.</div>
       </aside>
