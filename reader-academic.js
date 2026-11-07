@@ -1,5 +1,7 @@
 /* Research-platform sharing for all reader pages.
-   This copies a structured prompt to the clipboard; it does not send reader text to a service. */
+   The structured prompt is always copied to the clipboard. For platforms with a verified
+   query URL (deepLink), the site is opened with the prompt in its URL, so the text reaches
+   that service when the user taps the platform; otherwise nothing is sent until the user pastes. */
 (function () {
   'use strict';
 
@@ -14,7 +16,7 @@
       { id: 'paperguide', mode: 'question', name: 'Paperguide', url: 'https://paperguide.ai/', note: '1,500 رصيد و20 بحث AI شهرياً بالخطة المجانية' },
       { id: 'paperpal', mode: 'question', name: 'Paperpal', url: 'https://paperpal.com/', note: 'ميزات AI حتى 5 مرات يومياً؛ الحدود تختلف حسب الأداة' },
       { id: 'undermind', mode: 'question', name: 'Undermind', url: 'https://app.undermind.ai/', note: 'بحث عميق ينطلق من هدف أو سؤال' },
-      { id: 'perplexity', mode: 'question', name: 'Perplexity', url: 'https://www.perplexity.ai/', note: 'بحث ويب وأكاديمي مع مصادر' }
+      { id: 'perplexity', mode: 'question', name: 'Perplexity', url: 'https://www.perplexity.ai/', deepLink: 'https://www.perplexity.ai/search?q=', note: 'بحث ويب وأكاديمي مع مصادر؛ يُفتح مع السؤال جاهزاً' }
     ]},
     { group: 'اكتشاف الأوراق وشبكات المراجع', items: [
       { id: 'researchrabbit', mode: 'seed', name: 'ResearchRabbit', url: 'https://app.researchrabbit.ai/', note: 'تحتاج عادةً إلى ورقة أو DOI كبذرة' },
@@ -24,12 +26,19 @@
     { group: 'محركات وفهارس الأوراق', items: [
       { id: 'semantic-scholar', mode: 'search', name: 'Semantic Scholar', url: 'https://www.semanticscholar.org/', deepLink: 'https://www.semanticscholar.org/search?q=', note: 'محرك بحث أكاديمي؛ يُفتح مع الاستعلام جاهزاً' },
       { id: 'google-scholar', mode: 'search', name: 'Google Scholar', url: 'https://scholar.google.com/', deepLink: 'https://scholar.google.com/scholar?q=', note: 'فهرس واسع؛ يُفتح مع الاستعلام جاهزاً' },
-      { id: 'openalex', mode: 'search', name: 'OpenAlex', url: 'https://openalex.org/', note: 'فهرس مفتوح؛ واجهة API منفصلة للبحث الدلالي' }
+      { id: 'openalex', mode: 'search', name: 'OpenAlex', url: 'https://openalex.org/', note: 'فهرس مفتوح؛ واجهة API منفصلة للبحث الدلالي' },
+      { id: 'core', mode: 'search', name: 'CORE', url: 'https://core.ac.uk/search', note: 'أبحاث مفتوحة الوصول ومستودعات جامعية؛ الصق الاستعلام في خانة البحث' }
+    ]},
+    { group: 'مكتبات وأرشيفات (مصادر أولية ودراسات فرنسية)', items: [
+      { id: 'gallica', mode: 'search', name: 'Gallica (BnF)', url: 'https://gallica.bnf.fr/', note: 'مخطوطات وطبعات قديمة ومصادر أولية؛ البحث بالفرنسية أنسب، والصق الاستعلام في الخانة' },
+      { id: 'persee', mode: 'search', name: 'Persée', url: 'https://www.persee.fr/', note: 'دوريات العلوم الإنسانية الفرنسية بنص كامل؛ الصق الاستعلام في الخانة' },
+      { id: 'openedition', mode: 'search', name: 'OpenEdition', url: 'https://search.openedition.org/', note: 'كتب ودوريات ومدونات أكاديمية مفتوحة بالفرنسية وغيرها؛ الصق الاستعلام في الخانة' }
     ]},
     { group: 'مساعدات عامة بحصص مجانية متجددة', items: [
       { id: 'overchat', mode: 'question', name: 'Overchat AI', url: 'https://overchat.ai/', note: '100 رصيد يومياً؛ مساعد عام لا قاعدة أوراق متخصصة' },
       { id: 'gemini-deep-research', mode: 'question', name: 'Gemini Deep Research', url: 'https://gemini.google.com/', note: 'ضمن حدود Gemini المجانية؛ تتجدد كل 5 ساعات مع حد أسبوعي غير معلن' },
-      { id: 'claude', mode: 'question', name: 'Claude (مساعد عام)', url: 'https://claude.ai/', note: 'حد استخدام متغير يتجدد كل 5 ساعات وأسبوعياً؛ Research مدفوع' }
+      { id: 'chatgpt', mode: 'question', name: 'ChatGPT', url: 'https://chatgpt.com/', deepLink: 'https://chatgpt.com/?q=', note: 'مساعد عام بحد مجاني متغير؛ يُفتح مع السؤال جاهزاً' },
+      { id: 'claude', mode: 'question', name: 'Claude (مساعد عام)', url: 'https://claude.ai/', deepLink: 'https://claude.ai/new?q=', note: 'حد استخدام متغير يتجدد كل 5 ساعات وأسبوعياً؛ Research مدفوع؛ يُفتح مع السؤال جاهزاً' }
     ]},
     { group: 'دفاتر المصادر وتلخيص النصوص', items: [
       { id: 'google-notebooklm', mode: 'source', name: 'Google NotebookLM', url: 'https://notebooklm.google.com/', note: 'أضف الحزمة كمصدر إلى دفتر ثم اطرح سؤالك' },
@@ -43,6 +52,9 @@
   const PLATFORM_MAX_TOTAL = { scholarcy: 4800 };
   const SHORT_QUERY_CHARS = 200;
   const MIN_SIMILAR_CHARS = 15;
+  // أقصى طول لرابط عميق؛ ما زاد عنه يُفتح الموقع بلا استعلام وتُنسخ الحزمة فقط.
+  const MAX_DEEPLINK_URL = 6000;
+  const PREFS_KEY = 'readerResearchPrefs.v1';
   // قوالب أسئلة سريعة تملأ حقل السؤال البحثي؛ يمكن تعديل النص بعد اختيارها.
   const PRESETS = [
     { id: 'accuracy', label: 'فحص الدقة', q: 'ما مدى دقة الفكرة أو الادعاء الوارد في المقتطف، وكيف تفسره الدراسات والمصادر الأولية ذات الصلة؟' },
@@ -52,7 +64,21 @@
     { id: 'translations', label: 'الترجمات والطبعات', q: 'ما الطبعات النقدية والترجمات المتاحة للمصدر المذكور، وهل تختلف في فهم هذا الموضع؟' }
   ];
   const MAX_QUESTION_CHARS = 600;
-  const state = { open: false, view: 'platforms', selected: null, items: [], includeNotes: false, question: '' };
+  const state = { open: false, view: 'platforms', selected: null, items: [], includeNotes: false, question: '', favorites: ['consensus'], last: null };
+  // المفضلة وآخر منصة تُحفظ في المتصفح فقط (localStorage قد يكون غير متاح أو فارغاً، لذلك كل شيء داخل try/catch).
+  function loadPrefs() {
+    try {
+      const raw = localStorage.getItem(PREFS_KEY);
+      const saved = raw ? JSON.parse(raw) : null;
+      if (!saved || typeof saved !== 'object') return;
+      if (Array.isArray(saved.favorites)) state.favorites = saved.favorites.filter(id => typeof id === 'string' && platformById(id));
+      if (typeof saved.last === 'string' && platformById(saved.last)) state.last = saved.last;
+    } catch (_) {}
+  }
+  function savePrefs() {
+    try { localStorage.setItem(PREFS_KEY, JSON.stringify({ favorites: state.favorites, last: state.last })); } catch (_) {}
+  }
+  loadPrefs();
   let lastSelection = null;
   let root, trigger, panel;
 
@@ -201,6 +227,22 @@
     const title = safeText(context.title).trim();
     return (title ? title + ' — ' : '') + passage + (question ? ' — ' + clipText(question, 100) : '');
   }
+  // نسخة مختصرة تُحمَّل في الرابط العميق لمنصات الأسئلة (الحزمة الكاملة تبقى في الحافظة)،
+  // حتى لا يتجاوز الرابط الحد المقبول مع المقتطفات المتوسطة.
+  function buildDeepLinkPrompt(context) {
+    const arabic = isArabicText(context.text);
+    const q = safeText(state.question).replace(/\s+/g, ' ').trim().slice(0, MAX_QUESTION_CHARS);
+    const passage = clipText(safeText(context.text).replace(/\s+/g, ' '), 500);
+    const source = [safeText(context.title).trim(), safeText(context.author).trim()].filter(Boolean).join(' — ');
+    if (arabic) {
+      return (q || 'ما مدى دقة الفكرة الواردة في المقتطف التالي، وكيف تفسرها الدراسات والمصادر الأولية؟') +
+        '\nالمقتطف: «' + passage + '»' + (source ? '\nالمصدر: ' + source : '') +
+        '\nاستشهد بمصادر موثقة ولا تخترع مراجع، وابحث بالإنجليزية والفرنسية أيضاً، وأجب بالعربية.';
+    }
+    return (q || 'How accurate is the idea in the following passage, and how do scholarly studies and primary sources interpret it?') +
+      '\nPassage: "' + passage + '"' + (source ? '\nSource: ' + source : '') +
+      '\nCite verifiable sources only, do not invent references, and search in English, French, and German as well.';
+  }
   function buildPrompt(context, platformId) {
     const platform = platformById(platformId);
     const mode = platform ? platform.mode : 'question';
@@ -327,12 +369,69 @@
     });
     if (entries.length > 80) list.insertAdjacentHTML('beforeend', '<div class="reader-research-empty">تظهر أول 80 نتيجة فقط؛ استخدم البحث لتضييق القائمة.</div>');
   }
+  function platformCard(item) {
+    const fav = state.favorites.includes(item.id);
+    const tag = item.id === state.last && !fav ? ' · الأخيرة' : '';
+    const cta = item.deepLink ? 'فتح الموقع بالاستعلام جاهزاً ↗' : 'نسخ الحزمة وفتح الموقع ↗';
+    return '<div class="reader-research-item"><a class="reader-research-platform" href="' + escapeHtml(item.url) + '" target="_blank" rel="noopener noreferrer" data-platform="' + escapeHtml(item.name) + '" data-platform-id="' + escapeHtml(item.id) + '"><strong>' + escapeHtml(item.name + tag) + '</strong><span>' + escapeHtml(item.note) + '</span><span class="reader-research-cta">' + cta + '</span></a>' +
+      '<button type="button" class="reader-research-star" data-star-id="' + escapeHtml(item.id) + '" aria-pressed="' + (fav ? 'true' : 'false') + '" aria-label="' + (fav ? 'إزالة من المفضلة' : 'تثبيت في المفضلة') + '">' + (fav ? '★' : '☆') + '</button></div>';
+  }
+  // المفضلة أولاً بترتيب التثبيت، وآخر منصة استُخدمت في المقدمة.
+  function pinnedIds() {
+    const ids = [];
+    [state.last].concat(state.favorites).forEach(id => { if (id && !ids.includes(id) && platformById(id)) ids.push(id); });
+    return ids;
+  }
   function platformMarkup() {
-    return PLATFORMS.map(group => '<section class="reader-research-group"><h3>' + escapeHtml(group.group) + '</h3><div class="reader-research-platforms">' + group.items.map(item => '<a class="reader-research-platform" href="' + escapeHtml(item.url) + '" target="_blank" rel="noopener noreferrer" data-platform="' + escapeHtml(item.name) + '" data-platform-id="' + escapeHtml(item.id) + '"><strong>' + escapeHtml(item.name) + '</strong><span>' + escapeHtml(item.note) + '</span><span class="reader-research-cta">نسخ الحزمة وفتح الموقع ↗</span></a>').join('') + '</div></section>').join('');
+    const pinned = pinnedIds().map(platformById);
+    const pinnedHtml = pinned.length ? '<section class="reader-research-group"><h3>⭐ المفضلة والأخيرة</h3><div class="reader-research-platforms">' + pinned.map(platformCard).join('') + '</div></section>' : '';
+    return pinnedHtml + PLATFORMS.map(group => '<section class="reader-research-group"><h3>' + escapeHtml(group.group) + '</h3><div class="reader-research-platforms">' + group.items.map(platformCard).join('') + '</div></section>').join('');
+  }
+  // يربط أزرار النجمة وبطاقات المنصات؛ يُستدعى عند رسم اللوحة وعند تغيير المفضلة.
+  function bindPlatformList() {
+    panel.querySelectorAll('.reader-research-star').forEach(button => {
+      button.addEventListener('click', () => {
+        const id = button.dataset.starId;
+        state.favorites = state.favorites.includes(id) ? state.favorites.filter(item => item !== id) : state.favorites.concat(id);
+        savePrefs();
+        const list = panel.querySelector('.reader-research-platform-list');
+        if (list) { list.innerHTML = platformMarkup(); bindPlatformList(); }
+      });
+    });
+    panel.querySelectorAll('.reader-research-platform').forEach(link => {
+      link.addEventListener('click', event => {
+        // نمنع فتح الرابط الافتراضي: النسخ يجب أن يتم أولاً وبشكل متزامن ضمن الضغطة نفسها،
+        // وإلا فقد يفقد المستند التركيز عند فتح التبويب الجديد فيفشل النسخ (خاصة على الجوال).
+        event.preventDefault();
+        const context = state.selected || lastSelection;
+        if (!context || !safeText(context.text).trim()) {
+          showToast('حدّد نصاً أو اختر ملاحظة/تظليلاً محفوظاً أولاً.');
+          return;
+        }
+        const platform = platformById(link.dataset.platformId);
+        const prompt = buildPrompt(context, link.dataset.platformId);
+        const copied = copySync(prompt);
+        if (!copied && navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(prompt).catch(() => {});
+        let target = link.href;
+        let prefilled = false;
+        if (platform && platform.deepLink) {
+          const query = platform.mode === 'question' ? buildDeepLinkPrompt(context) : prompt;
+          const deep = platform.deepLink + encodeURIComponent(query);
+          if (deep.length <= MAX_DEEPLINK_URL) { target = deep; prefilled = true; }
+        }
+        window.open(target, '_blank', 'noopener');
+        state.last = link.dataset.platformId;
+        savePrefs();
+        if (prefilled) showToast('✓ فُتحت ' + link.dataset.platform + ' بالاستعلام جاهزاً' + (platform.mode === 'question' ? ' (نسخة مختصرة)' : '') + '، والحزمة الكاملة منسوخة');
+        else if (platform && platform.mode === 'seed') showToast('✓ نُسخ استعلام قصير؛ ابحث بعنوان ورقة أو DOI في ' + link.dataset.platform);
+        else showToast(copied ? '✓ نُسخت الحزمة؛ الصقها في ' + link.dataset.platform : 'تعذّر النسخ تلقائياً؛ انسخ النص يدوياً.');
+        closePanel();
+      });
+    });
   }
   function renderPanel() {
     if (!panel) return;
-    panel.innerHTML = '<div class="reader-research-head"><div><strong>🔬 منصات البحث العلمي</strong><div class="reader-research-sub">تُنسخ الحزمة ولا تُرسل تلقائياً. الصقيها يدوياً. حدود الاستخدام المجاني قد تختلف أو تتغير؛ أدوات الخرائط تحتاج غالباً ورقة أو DOI، والدفاتر تتطلب إضافة النص كمصدر.</div></div><button type="button" class="reader-research-close" aria-label="إغلاق">×</button></div>' +
+    panel.innerHTML = '<div class="reader-research-head"><div><strong>🔬 منصات البحث العلمي</strong><div class="reader-research-sub">تُنسخ الحزمة دائماً. المنصات المكتوب عليها «بالاستعلام جاهزاً» تُفتح والنص في رابطها (فيصلها عند الفتح)، والباقي لا يصله شيء حتى تلصقه بنفسك. اضغط ☆ لتثبيت منصة في المفضلة. حدود الاستخدام المجاني قد تتغير؛ أدوات الخرائط تحتاج غالباً ورقة أو DOI، والدفاتر تتطلب إضافة النص كمصدر.</div></div><button type="button" class="reader-research-close" aria-label="إغلاق">×</button></div>' +
       '<div class="reader-research-context"></div>' +
       '<div class="reader-research-question-box"><label>سؤالك البحثي (اختياري)<textarea class="reader-research-question" rows="2" maxlength="' + MAX_QUESTION_CHARS + '" placeholder="اتركه فارغاً لاستخدام السؤال الافتراضي: فحص دقة الفكرة"></textarea></label><div class="reader-research-presets">' + PRESETS.map(p => '<button type="button" class="reader-research-chip" data-preset="' + escapeHtml(p.id) + '">' + escapeHtml(p.label) + '</button>').join('') + '</div></div>' +
       '<div class="reader-research-actions"><button type="button" class="reader-research-secondary" data-action="use-selection">استخدام النص المحدد</button><button type="button" class="reader-research-secondary" data-action="show-annotations">اختيار ملاحظة أو تظليل محفوظ</button></div>' +
@@ -368,28 +467,7 @@
       notesToggle.checked = state.includeNotes;
       notesToggle.addEventListener('change', () => { state.includeNotes = notesToggle.checked; });
     }
-    panel.querySelectorAll('.reader-research-platform').forEach(link => {
-      link.addEventListener('click', event => {
-        // نمنع فتح الرابط الافتراضي: النسخ يجب أن يتم أولاً وبشكل متزامن ضمن الضغطة نفسها،
-        // وإلا فقد يفقد المستند التركيز عند فتح التبويب الجديد فيفشل النسخ (خاصة على الجوال).
-        event.preventDefault();
-        const context = state.selected || lastSelection;
-        if (!context || !safeText(context.text).trim()) {
-          showToast('حدّد نصاً أو اختر ملاحظة/تظليلاً محفوظاً أولاً.');
-          return;
-        }
-        const platform = platformById(link.dataset.platformId);
-        const prompt = buildPrompt(context, link.dataset.platformId);
-        const copied = copySync(prompt);
-        if (!copied && navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(prompt).catch(() => {});
-        const target = platform && platform.deepLink ? platform.deepLink + encodeURIComponent(prompt) : link.href;
-        window.open(target, '_blank', 'noopener');
-        if (platform && platform.deepLink) showToast('✓ فُتح البحث في ' + link.dataset.platform + ' بالاستعلام جاهزاً');
-        else if (platform && (platform.mode === 'seed')) showToast('✓ نُسخ استعلام قصير؛ ابحث بعنوان ورقة أو DOI في ' + link.dataset.platform);
-        else showToast(copied ? '✓ نُسخت الحزمة؛ الصقها في ' + link.dataset.platform : 'تعذّر النسخ تلقائياً؛ انسخ النص يدوياً.');
-        closePanel();
-      });
-    });
+    bindPlatformList();
     updateContextSummary();
     if (state.view === 'annotations') renderAnnotationList();
     if (state.open) positionPanel();
@@ -464,6 +542,10 @@
       .reader-research-filter{display:block;box-sizing:border-box;width:100%;margin-top:4px;padding:7px;border:1px solid var(--border,#bbb);border-radius:6px;background:var(--bg,#fff);color:var(--text,#222);font:inherit}
       .reader-research-filter-check{display:flex!important;align-items:center;gap:6px}
       .reader-research-notes-opt{font-size:11px;color:var(--text2,#666);margin:6px 0}
+      .reader-research-item{position:relative}
+      .reader-research-item .reader-research-platform{padding-left:40px}
+      .reader-research-star{position:absolute;top:3px;left:3px;width:34px;height:34px;border:0;border-radius:6px;background:transparent;color:var(--text2,#888);font-size:18px;line-height:1;cursor:pointer}
+      .reader-research-star[aria-pressed="true"]{color:var(--gold,#c79a2b)}
       .reader-research-question-box{margin:8px 0}
       .reader-research-question-box label{display:block;font-size:11px;color:var(--text2,#666)}
       .reader-research-question{display:block;box-sizing:border-box;width:100%;margin-top:4px;padding:7px;border:1px solid var(--border,#bbb);border-radius:6px;background:var(--bg,#fff);color:var(--text,#222);font-family:inherit;font-size:13px;line-height:1.5;resize:vertical;min-height:48px}
