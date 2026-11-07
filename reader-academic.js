@@ -22,7 +22,8 @@
       { id: 'connected-papers', mode: 'seed', name: 'Connected Papers', url: 'https://www.connectedpapers.com/', note: 'شبكة أوراق تبدأ بورقة منشورة' }
     ]},
     { group: 'محركات وفهارس الأوراق', items: [
-      { id: 'semantic-scholar', mode: 'search', name: 'Semantic Scholar', url: 'https://www.semanticscholar.org/', note: 'محرك بحث أكاديمي؛ السؤال متاح لبعض الأوراق' },
+      { id: 'semantic-scholar', mode: 'search', name: 'Semantic Scholar', url: 'https://www.semanticscholar.org/', deepLink: 'https://www.semanticscholar.org/search?q=', note: 'محرك بحث أكاديمي؛ يُفتح مع الاستعلام جاهزاً' },
+      { id: 'google-scholar', mode: 'search', name: 'Google Scholar', url: 'https://scholar.google.com/', deepLink: 'https://scholar.google.com/scholar?q=', note: 'فهرس واسع؛ يُفتح مع الاستعلام جاهزاً' },
       { id: 'openalex', mode: 'search', name: 'OpenAlex', url: 'https://openalex.org/', note: 'فهرس مفتوح؛ واجهة API منفصلة للبحث الدلالي' }
     ]},
     { group: 'مساعدات عامة بحصص مجانية متجددة', items: [
@@ -37,7 +38,21 @@
     ]}
   ];
 
-  const state = { open: false, view: 'platforms', selected: null, items: [] };
+  // سقف طول المقتطف داخل الحزمة، وحدود خاصة ببعض الخدمات (Scholarcy: نص ملصوق حتى 5,000 حرف).
+  const MAX_PASSAGE_CHARS = 6000;
+  const PLATFORM_MAX_TOTAL = { scholarcy: 4800 };
+  const SHORT_QUERY_CHARS = 200;
+  const MIN_SIMILAR_CHARS = 15;
+  // قوالب أسئلة سريعة تملأ حقل السؤال البحثي؛ يمكن تعديل النص بعد اختيارها.
+  const PRESETS = [
+    { id: 'accuracy', label: 'فحص الدقة', q: 'ما مدى دقة الفكرة أو الادعاء الوارد في المقتطف، وكيف تفسره الدراسات والمصادر الأولية ذات الصلة؟' },
+    { id: 'counter', label: 'أدلة معارضة', q: 'ما الدراسات والأدلة التي تعارض هذه الفكرة أو تقيّدها أو تقترح تفسيراً بديلاً لها؟' },
+    { id: 'primary', label: 'مصادر أولية', q: 'ما المصادر الأولية القديمة ذات الصلة بهذا المقتطف (بلغاتها الأصلية)، وأين يرد المعنى نفسه أو ما يشبهه فيها؟' },
+    { id: 'dating', label: 'التأريخ', q: 'كيف يُؤرَّخ هذا النص أو الحدث، وما مواضع الخلاف بين الباحثين في تأريخه وسياقه؟' },
+    { id: 'translations', label: 'الترجمات والطبعات', q: 'ما الطبعات النقدية والترجمات المتاحة للمصدر المذكور، وهل تختلف في فهم هذا الموضع؟' }
+  ];
+  const MAX_QUESTION_CHARS = 600;
+  const state = { open: false, view: 'platforms', selected: null, items: [], includeNotes: false, question: '' };
   let lastSelection = null;
   let root, trigger, panel;
 
@@ -56,9 +71,13 @@
     try { if (typeof cur !== 'undefined') currentIndex = Number(cur); } catch (_) {}
     return { books, savedNotes, savedMarks, currentIndex };
   }
-  function currentBook() {
+  function currentBook(pane) {
     const data = readerData();
-    return data.currentIndex >= 0 ? (data.books[data.currentIndex] || null) : null;
+    let index = data.currentIndex;
+    if (pane === 2) {
+      try { if (typeof cur2 !== 'undefined') index = Number(cur2); } catch (_) {}
+    }
+    return index >= 0 ? (data.books[index] || null) : null;
   }
   function passageText() {
     try { return typeof selText !== 'undefined' ? safeText(selText).trim() : ''; } catch (_) { return ''; }
@@ -66,22 +85,30 @@
   function paragraphId() {
     try { return typeof selPid !== 'undefined' ? selPid : null; } catch (_) { return null; }
   }
-  function isInsideReader(node) {
-    const bookText = byId('bookText');
-    return !!(bookText && node && (node === bookText || bookText.contains(node.nodeType === 3 ? node.parentNode : node)));
+  // يعيد 1 أو 2 حسب لوح القراءة الذي يحوي العقدة، أو 0 إن كانت خارج القارئ.
+  function paneOf(node) {
+    if (!node) return 0;
+    const el = node.nodeType === 3 ? node.parentNode : node;
+    const first = byId('bookText');
+    const second = byId('bookText2');
+    if (first && (el === first || first.contains(el))) return 1;
+    if (second && (el === second || second.contains(el))) return 2;
+    return 0;
   }
+  function isInsideReader(node) { return paneOf(node) > 0; }
   function captureSelection() {
     const selection = window.getSelection && window.getSelection();
     if (!selection || !selection.rangeCount) return;
     const text = selection.toString().trim();
     if (!text) return;
     const range = selection.getRangeAt(0);
-    if (!isInsideReader(range.startContainer)) return;
-    const book = currentBook();
+    const pane = paneOf(range.startContainer);
+    if (!pane) return;
+    const book = currentBook(pane);
     if (!book) return;
     let pid = null;
     try {
-      if (typeof getParagraphIdForNode === 'function') pid = getParagraphIdForNode(byId('bookText'), range.startContainer);
+      if (typeof getParagraphIdForNode === 'function') pid = getParagraphIdForNode(byId(pane === 2 ? 'bookText2' : 'bookText'), range.startContainer);
       else pid = paragraphId();
     } catch (_) { pid = paragraphId(); }
     lastSelection = { kind: 'selection', text, bookId: book.id, title: book.title, author: book.author || '', pid };
@@ -131,17 +158,18 @@
     const selected = safeText(context.text).toLowerCase().replace(/\s+/g, ' ').trim();
     const similarText = item => {
       const snip = safeText(item.snip).toLowerCase().replace(/\s+/g, ' ').trim();
-      return snip && selected && (selected.includes(snip.slice(0, 60)) || snip.includes(selected.slice(0, 60)));
+      // حد أدنى للطول حتى لا يطابق تحديد قصير (كلمة واحدة) عدداً كبيراً من الملاحظات.
+    return snip.length >= MIN_SIMILAR_CHARS && selected.length >= MIN_SIMILAR_CHARS && (selected.includes(snip.slice(0, 60)) || snip.includes(selected.slice(0, 60)));
     };
     const linkedNotes = data.savedNotes.filter(item => item.bookId === context.bookId && (sameParagraph(item) || similarText(item)));
     const linkedMarks = data.savedMarks.filter(item => item.bookId === context.bookId && item.color && item.snip && item.snip !== '(بداية الصفحة)' && (sameParagraph(item) || similarText(item)));
     return { notes: linkedNotes, highlights: linkedMarks };
   }
   function selectCurrentPassage() {
-    const book = currentBook();
     const selection = lastSelection;
-    if (!selection || !selection.text || !book) return false;
-    state.selected = { ...selection, title: book.title || selection.title, author: book.author || selection.author };
+    if (!selection || !selection.text) return false;
+    // العنوان والمؤلف يؤخذان من التحديد نفسه (قد يكون من اللوح الثاني)، لا من الكتاب المفتوح في اللوح الأول.
+    state.selected = { ...selection };
     state.view = 'platforms';
     renderPanel();
     return true;
@@ -156,24 +184,48 @@
     const latinCount = (value.match(/[A-Za-z]/g) || []).length;
     return arabicCount > 0 && arabicCount >= latinCount * 0.5;
   }
+  function platformById(platformId) {
+    return PLATFORMS.flatMap(group => group.items).find(item => item.id === platformId);
+  }
+  function clipText(value, limit) {
+    const s = safeText(value).trim();
+    if (s.length <= limit) return s;
+    const cut = s.slice(0, limit);
+    const space = cut.lastIndexOf(' ');
+    return (space > limit * 0.7 ? cut.slice(0, space) : cut) + ' […]';
+  }
+  // استعلام قصير للمنصات التي تقبل كلمات بحث أو عنوان ورقة (الخرائط والفهارس)، لا فقرة كاملة.
+  function buildShortQuery(context) {
+    const question = safeText(state.question).replace(/\s+/g, ' ').trim();
+    const passage = clipText(safeText(context.text).replace(/\s+/g, ' '), question ? 120 : SHORT_QUERY_CHARS);
+    const title = safeText(context.title).trim();
+    return (title ? title + ' — ' : '') + passage + (question ? ' — ' + clipText(question, 100) : '');
+  }
   function buildPrompt(context, platformId) {
-    const arabic = isArabicText(context.text);
-    const platform = PLATFORMS.flatMap(group => group.items).find(item => item.id === platformId);
+    const platform = platformById(platformId);
     const mode = platform ? platform.mode : 'question';
+    if (mode === 'seed' || mode === 'search') return buildShortQuery(context);
     const text = safeText(context.text).trim();
-    const related = context.kind === 'selection' ? relatedAnnotations(context) : { notes: [], highlights: [] };
+    let limit = Math.min(text.length, MAX_PASSAGE_CHARS);
+    let prompt = buildFullPrompt(context, platformId, limit);
+    const max = PLATFORM_MAX_TOTAL[platformId];
+    if (max && prompt.length > max) {
+      limit = Math.max(300, limit - (prompt.length - max) - 20);
+      prompt = buildFullPrompt(context, platformId, limit);
+    }
+    return prompt;
+  }
+  function buildFullPrompt(context, platformId, passageLimit) {
+    const arabic = isArabicText(context.text);
+    const platform = platformById(platformId);
+    const mode = platform ? platform.mode : 'question';
+    const text = clipText(context.text, passageLimit);
+    const q = safeText(state.question).replace(/\s+/g, ' ').trim().slice(0, MAX_QUESTION_CHARS);
+    const related = (context.kind === 'selection' && state.includeNotes) ? relatedAnnotations(context) : { notes: [], highlights: [] };
     const lines = [];
     const add = value => lines.push(value);
 
-    if (mode === 'seed') {
-      add(arabic
-        ? 'ابحث عن ورقة علمية منشورة وذات صلة تصلح كبذرة لخريطة المراجع. المقتطف أدناه من كتاب، وليس DOI أو ورقة محكّمة؛ استخدمه لتحديد الموضوع فقط، ولا تتعامل معه بوصفه ورقة بذرة.'
-        : 'Find a published scholarly paper related to this passage that could serve as a seed for a citation map. The passage below is from a book, not a DOI or peer-reviewed paper; use it only to identify the topic, not as a seed paper.');
-    } else if (mode === 'search') {
-      add(arabic
-        ? 'ابحث عن أوراق ودراسات علمية تتناول المفاهيم الواردة في المقتطف. هذا استعلام بحث عن منشورات، وليس رفعاً للنص كمستند أو طلباً لتحليله.'
-        : 'Find scholarly papers about the concepts in this passage. Treat this as a search query for publications, not as an uploaded document or a request to analyze the passage itself.');
-    } else if (mode === 'source') {
+    if (mode === 'source') {
       add(arabic
         ? 'حزمة مصدر لإضافتها يدوياً إلى دفتر مصادر. بعد إضافة النص كمصدر، أجب عن السؤال: ما الأدلة العلمية أو المصادر الأولية ذات الصلة بالفكرة، وما حدودها؟'
         : 'Source packet to add manually to a research notebook. After adding this text as a source, answer: What scholarly evidence or primary sources are relevant to the idea, and what are their limitations?');
@@ -186,12 +238,14 @@
           ? 'نص مستورد للتلخيص والتنظيم. لخّص المادة المقتبسة أدناه بدقة، واستخرج الفكرة والمصطلحات والادعاءات الأساسية. ميّز ما يقوله النص عما لا يثبته.'
           : 'Imported text for summarization and organization. Summarize the passage accurately and extract its central idea, terms, and claims. Distinguish what the passage says from what it does not establish.'));
     } else if (arabic) {
-      add('أجرِ بحثاً أكاديمياً موثقاً للإجابة عن السؤال البحثي الآتي: ما مدى دقة الفكرة أو الادعاء الوارد في المقتطف، وكيف تفسره الدراسات والمصادر الأولية ذات الصلة؟');
+      add('أجرِ بحثاً أكاديمياً موثقاً للإجابة عن السؤال البحثي الآتي: ' + (q || 'ما مدى دقة الفكرة أو الادعاء الوارد في المقتطف، وكيف تفسره الدراسات والمصادر الأولية ذات الصلة؟'));
       add('اعرض الأدلة المؤيدة والمعارضة، وميّز بوضوح بين المصادر الأولية والدراسات المحكمة أو الثانوية. أورد الاستشهادات وروابط الناشر أو DOI عند توفرها، واذكر حدود الأدلة والخلافات البحثية. لا تتعامل مع المقتطف بوصفه حقيقة مثبتة، ولا تخترع مراجع.');
     } else {
-      add('Conduct a source-grounded academic investigation: How accurate is the idea or claim in this passage, and how do relevant primary sources and scholarly studies interpret it?');
+      add('Conduct a source-grounded academic investigation: ' + (q || 'How accurate is the idea or claim in this passage, and how do relevant primary sources and scholarly studies interpret it?'));
       add('Present evidence for and against the claim. Distinguish primary sources from peer-reviewed or secondary scholarship. Provide citations and publisher or DOI links where available, and explain evidence limits and scholarly disagreements. Do not treat the passage as established fact or invent references.');
     }
+
+    if (q && (mode === 'source' || mode === 'document')) add((arabic ? 'السؤال المطلوب: ' : 'Requested question: ') + q);
 
     add('');
     add(arabic ? 'بيانات المصدر:' : 'Source context:');
@@ -199,7 +253,7 @@
     add((arabic ? 'المؤلف: ' : 'Author: ') + authorOf(context, arabic));
     add((arabic ? 'رقم الفقرة في القارئ: ' : 'Paragraph number in reader: ') + paragraphOf(context));
     add((arabic ? 'المقتطف: «' : 'Passage: “') + text + (arabic ? '»' : '”'));
-    if (context.note) add((arabic ? 'ملاحظة القارئ: ' : 'Reader note: ') + safeText(context.note).trim());
+    if (context.note && state.includeNotes) add((arabic ? 'ملاحظة القارئ: ' : 'Reader note: ') + safeText(context.note).trim());
     if (context.kind === 'highlight') add(arabic ? 'نوع المادة: تظليل محفوظ' : 'Selected material: saved highlight');
     if (context.kind === 'note') add(arabic ? 'نوع المادة: ملاحظة محفوظة' : 'Selected material: saved note');
     if (related.notes.length) {
@@ -210,17 +264,20 @@
       add(''); add(arabic ? 'تظليلات محفوظة مرتبطة بالفقرة:' : 'Saved highlights linked to this paragraph:');
       related.highlights.slice(0, 5).forEach(item => add('- «' + safeText(item.snip).trim() + '»' + (item.note ? (arabic ? ' — ملاحظة: ' : ' — Note: ') + item.note : '')));
     }
-    if (mode === 'seed') add(arabic
-      ? '\nملاحظة: إذا لم يقبل البحث فقرة حرة، استخدم عنوان ورقة علمية أو DOI مطابقاً للموضوع لبدء الخريطة.'
-      : '\nNote: If the search does not accept a free-text passage, use the title or DOI of a matching scholarly paper to start the map.');
     if (mode === 'source') add(arabic
       ? '\nبعد إضافة المصدر إلى الدفتر، اسأل عن الأدلة والاختلافات البحثية مع إحالات قابلة للتحقق.'
       : '\nAfter adding the source to the notebook, ask about the evidence and research disagreements with verifiable citations.');
     if (mode === 'document') add(arabic
       ? '\nلا تضف ادعاءات أو مراجع غير موجودة في النص المستورد.'
       : '\nDo not add claims or references that are absent from the imported text.');
-    if (mode === 'question' && arabic) add('\nنظّم الإجابة تحت: سؤال محدد، خلاصة الأدلة، المصادر وأنواعها، مواضع الاتفاق والخلاف، وما لا تسمح الأدلة بالجزم به.');
-    if (mode === 'question' && !arabic) add('\nOrganize the response as: focused question, evidence summary, sources and source types, areas of agreement and dispute, and what the evidence cannot establish.');
+    if (mode === 'question' && arabic) {
+      add('\nابحث في الأدبيات بالإنجليزية والفرنسية والألمانية أيضاً، لا بالعربية وحدها، فمعظم الدراسات المحكّمة منشورة بها (ومصطلحات اليونانية واللاتينية للمصادر القديمة عند الحاجة)، وأجب بالعربية.');
+      add('نظّم الإجابة تحت: سؤال محدد، خلاصة الأدلة، المصادر وأنواعها، مواضع الاتفاق والخلاف، وما لا تسمح الأدلة بالجزم به.');
+    }
+    if (mode === 'question' && !arabic) {
+      add('\nSearch the literature in English, French, and German as well, and in Arabic where relevant (and Greek or Latin terms for ancient sources).');
+      add('Organize the response as: focused question, evidence summary, sources and source types, areas of agreement and dispute, and what the evidence cannot establish.');
+    }
     return lines.join('\n');
   }
   function showToast(message) {
@@ -277,7 +334,9 @@
     if (!panel) return;
     panel.innerHTML = '<div class="reader-research-head"><div><strong>🔬 منصات البحث العلمي</strong><div class="reader-research-sub">تُنسخ الحزمة ولا تُرسل تلقائياً. الصقيها يدوياً. حدود الاستخدام المجاني قد تختلف أو تتغير؛ أدوات الخرائط تحتاج غالباً ورقة أو DOI، والدفاتر تتطلب إضافة النص كمصدر.</div></div><button type="button" class="reader-research-close" aria-label="إغلاق">×</button></div>' +
       '<div class="reader-research-context"></div>' +
+      '<div class="reader-research-question-box"><label>سؤالك البحثي (اختياري)<textarea class="reader-research-question" rows="2" maxlength="' + MAX_QUESTION_CHARS + '" placeholder="اتركه فارغاً لاستخدام السؤال الافتراضي: فحص دقة الفكرة"></textarea></label><div class="reader-research-presets">' + PRESETS.map(p => '<button type="button" class="reader-research-chip" data-preset="' + escapeHtml(p.id) + '">' + escapeHtml(p.label) + '</button>').join('') + '</div></div>' +
       '<div class="reader-research-actions"><button type="button" class="reader-research-secondary" data-action="use-selection">استخدام النص المحدد</button><button type="button" class="reader-research-secondary" data-action="show-annotations">اختيار ملاحظة أو تظليل محفوظ</button></div>' +
+      '<label class="reader-research-filter-check reader-research-notes-opt"><input type="checkbox" class="reader-research-include-notes"> تضمين ملاحظاتي وتظليلاتي المرتبطة بالحزمة (مطفأ افتراضياً حفاظاً على خصوصية أفكارك)</label>' +
       '<div class="reader-research-picker" ' + (state.view === 'annotations' ? '' : 'hidden') + '><label>ابحث في الملاحظات والتظليلات<input type="search" class="reader-research-filter" placeholder="عنوان الكتاب أو نص الملاحظة…"></label><label class="reader-research-filter-check"><input type="checkbox" class="reader-research-current-only" checked> الكتاب المفتوح فقط</label><div class="reader-research-annotation-list"></div></div>' +
       '<div class="reader-research-platform-list" ' + (state.view === 'annotations' ? 'hidden' : '') + '>' + platformMarkup() + '</div>';
     panel.querySelector('.reader-research-close').addEventListener('click', closePanel);
@@ -291,19 +350,43 @@
     const onlyCurrent = panel.querySelector('.reader-research-current-only');
     if (filter) filter.addEventListener('input', renderAnnotationList);
     if (onlyCurrent) onlyCurrent.addEventListener('change', renderAnnotationList);
+    const questionBox = panel.querySelector('.reader-research-question');
+    if (questionBox) {
+      questionBox.value = state.question;
+      questionBox.addEventListener('input', () => { state.question = questionBox.value; });
+    }
+    panel.querySelectorAll('.reader-research-chip').forEach(chip => {
+      chip.addEventListener('click', () => {
+        const preset = PRESETS.find(item => item.id === chip.dataset.preset);
+        if (!preset || !questionBox) return;
+        state.question = preset.q;
+        questionBox.value = preset.q;
+      });
+    });
+    const notesToggle = panel.querySelector('.reader-research-include-notes');
+    if (notesToggle) {
+      notesToggle.checked = state.includeNotes;
+      notesToggle.addEventListener('change', () => { state.includeNotes = notesToggle.checked; });
+    }
     panel.querySelectorAll('.reader-research-platform').forEach(link => {
       link.addEventListener('click', event => {
+        // نمنع فتح الرابط الافتراضي: النسخ يجب أن يتم أولاً وبشكل متزامن ضمن الضغطة نفسها،
+        // وإلا فقد يفقد المستند التركيز عند فتح التبويب الجديد فيفشل النسخ (خاصة على الجوال).
+        event.preventDefault();
         const context = state.selected || lastSelection;
         if (!context || !safeText(context.text).trim()) {
-          event.preventDefault();
           showToast('حدّد نصاً أو اختر ملاحظة/تظليلاً محفوظاً أولاً.');
           return;
         }
+        const platform = platformById(link.dataset.platformId);
         const prompt = buildPrompt(context, link.dataset.platformId);
-        try {
-          if (typeof copyToClipboard === 'function') copyToClipboard(prompt, '✓ نُسخت الحزمة البحثية؛ الصقها في ' + link.dataset.platform);
-          else copyFallback(prompt, link.dataset.platform);
-        } catch (_) { copyFallback(prompt, link.dataset.platform); }
+        const copied = copySync(prompt);
+        if (!copied && navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(prompt).catch(() => {});
+        const target = platform && platform.deepLink ? platform.deepLink + encodeURIComponent(prompt) : link.href;
+        window.open(target, '_blank', 'noopener');
+        if (platform && platform.deepLink) showToast('✓ فُتح البحث في ' + link.dataset.platform + ' بالاستعلام جاهزاً');
+        else if (platform && (platform.mode === 'seed')) showToast('✓ نُسخ استعلام قصير؛ ابحث بعنوان ورقة أو DOI في ' + link.dataset.platform);
+        else showToast(copied ? '✓ نُسخت الحزمة؛ الصقها في ' + link.dataset.platform : 'تعذّر النسخ تلقائياً؛ انسخ النص يدوياً.');
         closePanel();
       });
     });
@@ -311,15 +394,18 @@
     if (state.view === 'annotations') renderAnnotationList();
     if (state.open) positionPanel();
   }
-  function copyFallback(text, platformName) {
+  // نسخ متزامن عبر execCommand؛ يعيد true عند النجاح.
+  function copySync(text) {
     const area = document.createElement('textarea');
     area.value = text; area.setAttribute('readonly', '');
-    area.style.cssText = 'position:fixed;top:-10000px;left:-10000px';
-    document.body.appendChild(area); area.select();
+    area.style.cssText = 'position:fixed;top:-10000px;left:-10000px;opacity:0';
+    document.body.appendChild(area);
+    area.select();
+    try { area.setSelectionRange(0, text.length); } catch (_) {}
     let copied = false;
     try { copied = document.execCommand('copy'); } catch (_) {}
     area.remove();
-    showToast(copied ? '✓ نُسخت الحزمة؛ الصقها في ' + platformName : 'تعذّر النسخ تلقائياً.');
+    return copied;
   }
   function closePanel() {
     if (!panel || !trigger) return;
@@ -377,6 +463,13 @@
       .reader-research-picker label{display:block;font-size:11px;color:var(--text2,#666);margin:4px 0}
       .reader-research-filter{display:block;box-sizing:border-box;width:100%;margin-top:4px;padding:7px;border:1px solid var(--border,#bbb);border-radius:6px;background:var(--bg,#fff);color:var(--text,#222);font:inherit}
       .reader-research-filter-check{display:flex!important;align-items:center;gap:6px}
+      .reader-research-notes-opt{font-size:11px;color:var(--text2,#666);margin:6px 0}
+      .reader-research-question-box{margin:8px 0}
+      .reader-research-question-box label{display:block;font-size:11px;color:var(--text2,#666)}
+      .reader-research-question{display:block;box-sizing:border-box;width:100%;margin-top:4px;padding:7px;border:1px solid var(--border,#bbb);border-radius:6px;background:var(--bg,#fff);color:var(--text,#222);font-family:inherit;font-size:13px;line-height:1.5;resize:vertical;min-height:48px}
+      .reader-research-presets{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px}
+      .reader-research-chip{border:1px solid var(--border,#bbb);border-radius:999px;background:transparent;color:inherit;padding:4px 10px;font:inherit;font-size:11px;cursor:pointer}
+      .reader-research-chip:hover{border-color:var(--gold,#a7864a)}
       .reader-research-annotation-list{display:grid;gap:5px;margin-top:7px;max-height:220px;overflow:auto}
       .reader-research-annotation{display:grid;gap:2px;text-align:right;border:1px solid var(--border,#ccc);border-radius:6px;padding:7px;background:transparent;color:inherit;font:inherit;cursor:pointer;overflow-wrap:anywhere}
       .reader-research-annotation:hover{border-color:var(--accent,#527995)}
