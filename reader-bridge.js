@@ -596,6 +596,159 @@ async function exportText(o){
   return { text: text, counts: counts, truncated: truncated, chars: text.length };
 }
 
+/* ---------- تصدير مرتب: ملف Markdown / HTML بكل التظليل والملاحظات (بلا اقتطاع) ---------- */
+// ألوان التظليل في القوارئ مخزَّنة rgba؛ نعطيها أسماء ثابتة بترتيب الظهور
+var COLOR_DEFS = [ { key: '255,238,0', name: 'أصفر', dot: '🟨' }, { key: '140,255,120', name: 'أخضر', dot: '🟩' },
+                   { key: '77,225,255', name: 'سماوي', dot: '🟦' }, { key: '255,120,120', name: 'أحمر', dot: '🟥' } ];
+function colorDef(c){
+  if(!c) return null;
+  var s = String(c).replace(/\s+/g, '');
+  for(var i = 0; i < COLOR_DEFS.length; i++) if(s.indexOf(COLOR_DEFS[i].key) >= 0) return COLOR_DEFS[i];
+  return { key: '', name: 'لون آخر', dot: '⬜' };
+}
+function escHtml(s){ return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+function readerOrder(id){ var a = allReaders(); for(var i = 0; i < a.length; i++) if(a[i].id === id) return i; return 999; }
+
+function collectOrganized(o){
+  var kinds = o.kinds || { highlights: true, notes: true, bookmarks: true };
+  var rs = o.reader && o.reader !== 'all' ? findReader(o.reader) : allReaders();
+  var q = o.filter ? norm(o.filter) : '', out = [];
+  rs.forEach(function(r){
+    var d = userOf(r);
+    if(!d) return;
+    function push(e){
+      if(q && norm((e.text || '') + ' ' + (e.note || '')).indexOf(q) < 0) return;
+      e.reader = r.id; e.readerTitle = r.title; e.date = dayOf(e.ts);
+      out.push(e);
+    }
+    (d.bookmarks || []).forEach(function(bm){
+      var isHl = !!bm.color;
+      if(isHl ? !kinds.highlights : !kinds.bookmarks) return;
+      var cd = colorDef(bm.color);
+      push({ kind: isHl ? 'highlight' : 'bookmark', bookId: bm.bookId, book: bm.title || bm.bookId || '',
+             pid: bm.pid == null ? null : Number(bm.pid), color: bm.color || '', colorName: cd ? cd.name : '', dot: cd ? cd.dot : '',
+             text: bm.snip || '', note: bm.note || '', ts: bm.ts || 0 });
+    });
+    if(kinds.notes) (d.notes || []).forEach(function(n){
+      push({ kind: 'note', bookId: n.bookId, book: n.book || n.bookId || '', pid: n.pid == null ? null : Number(n.pid),
+             color: '', colorName: '', dot: '', text: n.snip || '', note: n.text || '', ts: n.ts || 0 });
+    });
+  });
+  return out;
+}
+function cmpEntries(a, b){
+  var pa = a.pid == null || isNaN(a.pid) ? 1e12 : a.pid, pb = b.pid == null || isNaN(b.pid) ? 1e12 : b.pid;
+  return pa - pb || (a.ts - b.ts);
+}
+// يقسّم عناصر إلى كتب (قارئ › كتاب) مرتبةً، وداخل كل كتاب بترتيب الفقرات
+function byBook(entries){
+  var map = {}, order = [];
+  entries.forEach(function(e){
+    var k = e.reader + '\u0001' + (e.bookId || e.book);
+    if(!map[k]){ map[k] = { title: e.readerTitle + ' › ' + e.book, rord: readerOrder(e.reader), book: e.book, entries: [] }; order.push(map[k]); }
+    map[k].entries.push(e);
+  });
+  order.sort(function(a, b){ return a.rord - b.rord || String(a.book).localeCompare(String(b.book), 'ar'); });
+  order.forEach(function(g){ g.entries.sort(cmpEntries); });
+  return order;
+}
+function parseTopics(s){
+  return String(s || '').split(/\n+/).map(function(line){
+    line = line.trim(); if(!line) return null;
+    // «اسم الموضوع: كلمة, كلمة» — ما قبل النقطتين عنوان فقط؛ وبلا نقطتين يكون السطر كله كلمات وعنواناً
+    var m = line.match(/^([^:：]+)[:：](.+)$/), label = m ? m[1].trim() : line, words = m ? m[2] : line;
+    var alts = words.split(/[,،|]/).map(function(x){ return norm(x); }).filter(function(x){ return x.length >= 2; });
+    return alts.length ? { label: label, alts: alts } : null;
+  }).filter(Boolean);
+}
+function buildSections(entries, groupBy, topicsText){
+  if(groupBy === 'color'){
+    var secs = [];
+    COLOR_DEFS.concat([{ key: '', name: 'لون آخر', dot: '⬜' }]).forEach(function(cd){
+      var es = entries.filter(function(e){ return e.kind === 'highlight' && e.colorName === cd.name; });
+      if(es.length) secs.push({ title: cd.dot + ' تظليل ' + cd.name, count: es.length, groups: byBook(es) });
+    });
+    var plain = entries.filter(function(e){ return e.kind !== 'highlight'; });
+    if(plain.length) secs.push({ title: '📝 الملاحظات والإشارات (بلا لون)', count: plain.length, groups: byBook(plain) });
+    return secs;
+  }
+  if(groupBy === 'topic'){
+    var topics = parseTopics(topicsText), secs2 = [], used = {};
+    topics.forEach(function(t){
+      var es = entries.filter(function(e){
+        var h = norm((e.text || '') + ' ' + (e.note || ''));
+        return t.alts.some(function(a){ return h.indexOf(a) >= 0; });
+      });
+      es.forEach(function(e){ used[entries.indexOf(e)] = 1; });
+      if(es.length) secs2.push({ title: '🏷 ' + t.label, count: es.length, groups: byBook(es) });
+    });
+    var rest = entries.filter(function(e, i){ return !used[i]; });
+    if(rest.length) secs2.push({ title: '▫️ غير مصنَّف' + (topics.length ? '' : ' (لم تُحدَّد مواضيع)'), count: rest.length, groups: byBook(rest) });
+    return secs2;
+  }
+  var gs = byBook(entries);
+  return gs.length ? [{ title: '', count: entries.length, groups: gs }] : [];
+}
+var KIND_LABEL = { highlight: 'تظليل', note: 'ملاحظة', bookmark: 'إشارة' };
+function mdEntry(e){
+  var head = '- **' + (e.pid != null && !isNaN(e.pid) ? 'فقرة ' + e.pid : 'بلا رقم فقرة') + '** · ' + (e.dot ? e.dot + ' ' : '') + KIND_LABEL[e.kind] + (e.date ? ' · ' + e.date : '');
+  var lines = [head];
+  if(e.kind === 'note'){
+    lines.push('  ' + oneLine(e.note));
+    if(e.text) lines.push('  ↳ عن: «' + oneLine(e.text) + '»');
+  }else{
+    if(e.text) lines.push('  «' + oneLine(e.text) + '»');
+    if(e.note) lines.push('  ↳ ملاحظتي: ' + oneLine(e.note));
+  }
+  return lines.join('\n');
+}
+function htmlEntry(e){
+  var sw = e.kind === 'highlight' && e.color ? '<span class="sw" style="background:' + escHtml(e.color) + '"></span>' : '';
+  var h = '<li class="e ' + e.kind + '"><div class="m">' + sw + '<b>' + (e.pid != null && !isNaN(e.pid) ? 'فقرة ' + e.pid : 'بلا رقم فقرة') + '</b> · ' + KIND_LABEL[e.kind] +
+          (e.colorName ? ' ' + escHtml(e.colorName) : '') + (e.date ? ' · ' + escHtml(e.date) : '') + '</div>';
+  if(e.kind === 'note'){
+    h += '<div class="n">' + escHtml(oneLine(e.note)) + '</div>';
+    if(e.text) h += '<div class="q">عن: «' + escHtml(oneLine(e.text)) + '»</div>';
+  }else{
+    if(e.text) h += '<div class="q">«' + escHtml(oneLine(e.text)) + '»</div>';
+    if(e.note) h += '<div class="n">ملاحظتي: ' + escHtml(oneLine(e.note)) + '</div>';
+  }
+  return h + '</li>';
+}
+var ORG_CSS = 'body{font-family:"Noto Naskh Arabic","Amiri",Tahoma,sans-serif;line-height:1.9;max-width:820px;margin:0 auto;padding:18px;color:#1c1917;background:#fff}' +
+  'h1{font-size:24px;margin:0 0 4px}h2{font-size:20px;margin:30px 0 6px;padding:6px 10px;background:#f1ece4;border-radius:8px}h3{font-size:17px;margin:20px 0 6px;color:#7c4a2d;border-bottom:1px solid #e5ddd0}' +
+  '.meta{color:#78716c;font-size:14px;margin-bottom:14px}ul{list-style:none;padding:0;margin:0}li.e{padding:8px 4px;border-bottom:1px dashed #e5ddd0;break-inside:avoid}' +
+  '.m{font-size:14px;color:#57534e}.sw{display:inline-block;width:14px;height:14px;border-radius:3px;margin-inline-end:6px;vertical-align:-2px;border:1px solid #0002}' +
+  '.q{margin-top:2px}.n{margin-top:2px;color:#7c4a2d}@media print{body{padding:0}h2{break-after:avoid}}';
+
+async function exportOrganized(o){
+  o = o || {};
+  var groupBy = o.groupBy === 'color' || o.groupBy === 'topic' ? o.groupBy : 'book';
+  var entries = collectOrganized(o);
+  var counts = { highlights: 0, notes: 0, bookmarks: 0, total: entries.length };
+  entries.forEach(function(e){ counts[e.kind === 'highlight' ? 'highlights' : e.kind === 'note' ? 'notes' : 'bookmarks']++; });
+  var secs = buildSections(entries, groupBy, o.topics);
+  var scope = o.reader && o.reader !== 'all' ? ((findReader(o.reader)[0] || {}).title || o.reader) : 'كل القوارئ';
+  var how = groupBy === 'color' ? 'حسب لون التظليل' : groupBy === 'topic' ? 'حسب المواضيع التي حدّدتها' : 'حسب الكتاب وترتيب الفقرات';
+  var today = dayOf(Date.now());
+  var meta = scope + ' · ' + counts.highlights + ' تظليل · ' + counts.notes + ' ملاحظة · ' + counts.bookmarks + ' إشارة · ترتيب: ' + how + ' · تاريخ التصدير ' + today +
+             (o.filter ? ' · فلترة بكلمة «' + oneLine(o.filter) + '»' : '');
+  var md = ['# تصدير مرتب من «القوارئ العشر»', meta, '> رقم الفقرة (pid) كما يظهر في القارئ. النص المقتبس هو المقطع المحفوظ مع التظليل أو الإشارة (قد يكون مقتطعاً من الفقرة).'];
+  var html = ['<h1>تصدير مرتب من «القوارئ العشر»</h1><div class="meta">' + escHtml(meta) + '</div>'];
+  if(!entries.length){ md.push('\n(لم يُعثر على بيانات مطابقة لما اخترته.)'); html.push('<p>لم يُعثر على بيانات مطابقة لما اخترته.</p>'); }
+  secs.forEach(function(sec){
+    if(sec.title){ md.push('\n## ' + sec.title + ' (' + sec.count + ')'); html.push('<h2>' + escHtml(sec.title) + ' (' + sec.count + ')</h2>'); }
+    sec.groups.forEach(function(g){
+      var lvl = sec.title ? '###' : '##';
+      md.push('\n' + lvl + ' ' + g.title + ' (' + g.entries.length + ')');
+      md.push(g.entries.map(mdEntry).join('\n'));
+      html.push((sec.title ? '<h3>' : '<h2>') + escHtml(g.title) + ' (' + g.entries.length + ')' + (sec.title ? '</h3>' : '</h2>') + '<ul>' + g.entries.map(htmlEntry).join('') + '</ul>');
+    });
+  });
+  var page = '<!doctype html><html lang="ar" dir="rtl" translate="no"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="google" content="notranslate"><title>تصدير مرتب — القوارئ العشر</title><style>' + ORG_CSS + '</style></head><body>' + html.join('\n') + '</body></html>';
+  return { markdown: md.join('\n'), html: page, counts: counts, sections: secs.length, filename: 'qawari-' + today };
+}
+
 /* ---------- تعريف الأدوات لواجهة Anthropic ---------- */
 var TOOLS = [
   { name: 'list_library',
@@ -656,7 +809,7 @@ async function execTool(name, input){
 function clearCache(){ loadCache = {}; }
 
 root.ReaderBridge = {
-  configure: configure, tools: function(){ return TOOLS; }, execTool: execTool, clearCache: clearCache, exportText: exportText,
+  configure: configure, tools: function(){ return TOOLS; }, execTool: execTool, clearCache: clearCache, exportText: exportText, exportOrganized: exportOrganized,
   _t: { norm: norm, paras: paras, loadReader: loadReader, findReader: findReader, displayContentOf: displayContentOf,
         extractSections: extractSections, paragraphStartLines: paragraphStartLines, splitParagraphOffsets: splitParagraphOffsets,
         searchTexts: searchTexts, readPassage: readPassage, getUserData: getUserData, listLibrary: listLibrary }

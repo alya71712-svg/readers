@@ -73,6 +73,7 @@ button.ghost{background:var(--soft);color:var(--accent);border:1px solid color-m
 .nav-btn{width:100%;min-width:0;display:flex;align-items:center;gap:5px;justify-content:center;margin:0;padding:12px 6px;font-size:16px;line-height:1.3;text-align:center;text-decoration:none;white-space:nowrap;background:transparent;color:var(--ink);border:1px solid var(--line)}
 .nav-btn:hover{background:var(--soft);color:var(--accent);border-color:color-mix(in srgb,var(--accent) 40%,var(--line))}
 .nav-icon{font-size:19px;flex:none;text-align:center}
+.nav-grid>:last-child:nth-child(odd){grid-column:1/-1}
 .panel-note{font-size:12px;line-height:1.7;color:var(--muted);border-top:1px solid var(--line);margin-top:14px;padding-top:12px}
 .modal-backdrop{position:fixed;inset:0;background:rgba(15,23,42,.45);display:none;align-items:center;justify-content:center;padding:18px;z-index:20}
 .modal-backdrop.open{display:flex}
@@ -177,6 +178,7 @@ body.panel-hidden .panel-toggle{position:fixed;right:0;top:50%;transform:transla
           <button class="nav-btn" type="button" onclick="recheck()" title="إعادة فحص الملفات"><span class="nav-icon">⟳</span>فحص الملفات</button>
           <button class="nav-btn" type="button" onclick="openCloud()" title="المزامنة السحابية"><span class="nav-icon">☁</span>المزامنة</button>
           <button class="nav-btn" type="button" onclick="openChat()" title="محادثة (نماذج مفتوحة أو Gemini أو Grok أو Claude)"><span class="nav-icon">💬</span>محادثة</button>
+          <button class="nav-btn" type="button" onclick="openOrganized()" title="تصدير التظليل والملاحظات مرتباً بالكتاب أو اللون أو الموضوع"><span class="nav-icon">📑</span>تصدير مرتب</button>
           <button class="nav-btn" type="button" onclick="openExport()" title="نسخ إلى Manus"><span class="nav-icon">📋</span>نسخ Manus</button>
           <a class="nav-btn" href="https://manus.im/" target="_blank" rel="noopener noreferrer" title="افتح Manus للدراسة" aria-label="افتح Manus في تبويب جديد للدراسة"><span class="nav-icon">↗</span>فتح Manus</a>
         </div>
@@ -191,7 +193,7 @@ body.panel-hidden .panel-toggle{position:fixed;right:0;top:50%;transform:transla
 
 <script src="cloud-config.js?v=1"></script>
 <script src="cloud-sync.js?v=2"></script>
-<script src="reader-bridge.js?v=2"></script>
+<script src="reader-bridge.js?v=3"></script>
 <script>
 // ============================================================
 // قائمة القوارئ العشر — عدّل هذه القائمة فقط لتغيير ما يظهر في الموقع.
@@ -1143,6 +1145,64 @@ function openExport(){
     el('div',{class:'row'},[mode,lim]),
     el('label',{text:'سؤالك (اختياري)'}),qu,
     el('div',{class:'row manus-actions'},[buildBtn,shareBtn,copyBtn,manusLink]),
+    info,out
+  ]));
+}
+
+// ---------- تصدير مرتب: ملف HTML أو Markdown بكل التظليل والملاحظات حسب الكتاب أو اللون أو موضوع ----------
+function openOrganized(){
+  const RB=window.ReaderBridge;
+  if(!RB||!RB.exportOrganized){openModal('تصدير مرتب',el('p',{text:'وحدة الربط لم تُحمَّل — أعد تحميل الصفحة.'}));return}
+  const rsel=el('select',{class:'chat-field'},[el('option',{value:'all',text:'كل القوارئ'})].concat(READERS.filter(r=>r.texts).map(r=>el('option',{value:r.id,text:r.title}))));
+  const chk=(label,on)=>{const i=el('input',{type:'checkbox'});i.checked=!!on;return {i,row:el('label',{class:'exp-chk'},[i,document.createTextNode(label)])}};
+  const cH=chk('تظليلي',true),cN=chk('ملاحظاتي',true),cB=chk('إشاراتي العادية',false);
+  const gsel=el('select',{class:'chat-field'},[['book','حسب الكتاب (بترتيب الفقرات)'],['color','حسب لون التظليل'],['topic','حسب مواضيع أحدّدها بكلمات']].map(([v,t])=>el('option',{value:v,text:t})));
+  const topics=el('textarea',{class:'chat-field',rows:'4',placeholder:'موضوع في كل سطر، والكلمات البديلة بفاصلة. مثال:\nالزوجة والجماعة: زوجة, wife, γυνή\nالحاكم: ملك, king, emperor'});
+  const topicsWrap=el('div',{},[el('label',{text:'المواضيع (يدخل العنصر في كل موضوع تحتوي كلماتُه نصَّ التظليل أو ملاحظته)'}),topics]);
+  topicsWrap.style.display='none';
+  gsel.onchange=()=>{topicsWrap.style.display=gsel.value==='topic'?'':'none'};
+  const filt=el('input',{type:'text',class:'chat-field',placeholder:'مثال: wife أو زوجة',autocomplete:'off'});
+  const info=el('div',{class:'exp-info',role:'status','aria-live':'polite'});
+  const out=el('textarea',{class:'chat-field exp-out',readonly:'readonly',placeholder:'اضغط «تجهيز» لتظهر المعاينة هنا…'});
+  const bHtml=el('button',{type:'button',class:'ghost',text:'⬇ HTML',disabled:'disabled'});
+  const bMd=el('button',{type:'button',class:'ghost',text:'⬇ Markdown',disabled:'disabled'});
+  const bCopy=el('button',{type:'button',class:'secondary',text:'📋 نسخ',disabled:'disabled'});
+  const build=el('button',{type:'button',text:'تجهيز'});
+  let res=null;
+  const download=(name,mime,text)=>{
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(new Blob(['﻿'+text],{type:mime+';charset=utf-8'}));
+    a.download=name;document.body.appendChild(a);a.click();
+    setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},1500);
+  };
+  build.onclick=async()=>{
+    build.disabled=true;bHtml.disabled=bMd.disabled=bCopy.disabled=true;out.value='';res=null;info.textContent='جارٍ التجهيز…';
+    try{
+      res=await RB.exportOrganized({reader:rsel.value,kinds:{highlights:cH.i.checked,notes:cN.i.checked,bookmarks:cB.i.checked},groupBy:gsel.value,topics:topics.value,filter:filt.value.trim()});
+      out.value=res.markdown;
+      const c=res.counts;
+      info.textContent=c.total?('تظليل '+c.highlights+' · ملاحظات '+c.notes+' · إشارات '+c.bookmarks+' — الإجمالي '+c.total):'لا توجد بيانات مطابقة لهذا الاختيار على هذا الجهاز.';
+      if(c.total)bHtml.disabled=bMd.disabled=bCopy.disabled=false;
+    }catch(e){info.textContent='تعذّر التجهيز: '+((e&&e.message)||e)}
+    finally{build.disabled=false}
+  };
+  bHtml.onclick=()=>res&&download(res.filename+'.html','text/html',res.html);
+  bMd.onclick=()=>res&&download(res.filename+'.md','text/markdown',res.markdown);
+  bCopy.onclick=async()=>{
+    if(!res)return;
+    try{await navigator.clipboard.writeText(res.markdown);info.textContent='✓ نُسخ النص (Markdown).'}
+    catch{out.focus();out.select();let ok=false;try{ok=document.execCommand('copy')}catch{}info.textContent=ok?'✓ نُسخ النص (Markdown).':'تعذّر النسخ التلقائي: النص محدَّد، اضغط عليه مطولاً واختر «نسخ».'}
+  };
+  openModal('تصدير مرتب',el('div',{class:'chat-form'},[
+    el('div',{class:'manus-brief'},[
+      el('strong',{text:'ملف مرتب بتظليلك وملاحظاتك'}),
+      el('p',{text:'يُجمَّع كل ما حفظتَه في القوارئ على هذا الجهاز دون اقتطاع، ويُرتَّب بحسب الكتاب أو اللون أو مواضيع تحدّدها. نزّله ملف HTML للقراءة والطباعة، أو Markdown للصقه في مستنداتك.'})
+    ]),
+    el('label',{text:'القارئ'}),rsel,
+    el('label',{text:'ما الذي يُضمَّن؟'}),cH.row,cN.row,cB.row,
+    el('label',{text:'الترتيب'}),gsel,topicsWrap,
+    el('label',{text:'فلترة بكلمة (اختياري)'}),filt,
+    el('div',{class:'row manus-actions'},[build,bHtml,bMd,bCopy]),
     info,out
   ]));
 }
