@@ -108,6 +108,20 @@ function injectCss(){
   '.rm-pair,.rm-gb .tb-pair{grid-column:1/-1;display:grid;grid-template-columns:1fr 1fr;gap:8px}',
   '.rm-gb>.tbtn:last-child:nth-child(odd){grid-column:1/-1}',
   '.rm-gb #save-reader-btn,.rm-gb .tb-pair .tbtn{min-width:0}',
+  /* لوحة «التحليل العميق»: خط وخانات أكبر لسهولة القراءة على الهاتف */
+  '#aip .rp-head{padding:14px 16px}',
+  '#aip .rp-head h2{font-size:20px!important}',
+  '#aip .rp-head .tbtn{min-width:46px;min-height:46px;font-size:18px}',
+  '#aip .rp-body{padding:14px 16px!important;font-size:17px}',
+  '#aip .rp-body>div[style*="gold"]{font-size:18px!important;line-height:1.6}',
+  '#aip .ai-section{margin-bottom:18px}',
+  '#aip .ai-section h4{font-size:16px!important;letter-spacing:0!important;text-transform:none!important;margin-bottom:10px!important;padding-bottom:6px!important}',
+  '#aip #ent-tags{display:flex;flex-wrap:wrap;gap:8px}',
+  '#aip .ai-tag{font-size:16px!important;padding:8px 14px!important;margin:0!important;border-radius:18px!important;line-height:1.3}',
+  '#aip .ai-snippet{font-size:16px!important;line-height:1.8;padding:12px 14px!important}',
+  '#aip .ai-btn{font-size:17px!important;min-height:54px;padding:12px!important;line-height:1.4;white-space:normal}',
+  '#aip .ai-section>div:not(#ent-tags){font-size:14px!important;margin-top:6px}',
+  '#aip .empty-panel{font-size:17px!important;padding:20px!important}',
   '@media (prefers-reduced-motion:reduce){#rm-drawer,#rm-back,.rm-ar{transition:none}}'
   ].join('\n');
   var st=mk('style',{id:'rm-style'}); st.textContent=css; document.head.appendChild(st);
