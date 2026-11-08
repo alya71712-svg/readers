@@ -42,11 +42,11 @@ function has(n,re){ return re.test(oc(n)); }
 /* يعيد: {g:'مجموعة', pair:'مفتاح زوج'?} أو null إن كان العنصر يبقى في الشريط العلوي */
 function classify(n){
   if(n.nodeType!==1) return null;
-  if(n.id==='rm-open'||n.id==='tb-title') return null;
+  if(n.id==='rm-open'||n.id==='tb-title'||n.id==='tb-home') return null;   // يبقى في الشريط: ☰ و🏠 الرئيسية و🧰 الأدوات
   if(n.tagName==='INPUT'||n.tagName==='SCRIPT'||n.tagName==='STYLE') return null;
   if(n.tagName==='BUTTON'&&txt(n)==='☰') return null;            // مفتاح قائمة الكتب الجانبية: يبقى
-  if(has(n,/\bopenSP\(/)||has(n,/\btoggleFind\(/)) return null;  // الأكثر استعمالاً: تبقى في الشريط
-  if(n.id==='reader-research-wrap') return {g:'search'};
+  if(has(n,/\b(openSP|toggleFind)\(/)) return {g:'search'};
+  if(n.id==='reader-research-wrap') return {g:'ai'};   // منصات البحث العلمي ضمن الذكاء الاصطناعي
   if(has(n,/\b(openSearch2|openBookToc|openEntities)\(/)) return {g:'search'};
   if(has(n,/\b(toggleBM|addBM|openNotes|openTimeline|openStats)\(/)) return {g:'read'};
   if(has(n,/\bnav\(-?1\)/)) return {g:'read',pair:'nav'};
@@ -56,12 +56,11 @@ function classify(n){
   if(n.hasAttribute('data-rai')){
     var t=txt(n);
     if(/^📤/.test(t)) return {g:'share'};
-    if(/^🏠/.test(t)) return {g:'lib'};
     if(t==='⚙'||/^(💡|🔎|🔬)/.test(t)) return {g:'ai'};
   }
   if(n.id==='split-btn'||n.id==='close-compare-btn') return {g:'cmp'};
   if(has(n,/\b(exportCurrentBook|exportUserData)\(/)||n.classList.contains('tb-pair')||n.id==='save-reader-btn') return {g:'share'};
-  if(has(n,/\bopenAddBook\(/)||n.id==='tb-home') return {g:'lib'};
+  if(has(n,/\bopenAddBook\(/)) return {g:'lib'};
   return {g:'other'};
 }
 
@@ -169,6 +168,8 @@ function place(n){
 function sweep(){
   if(!tb1) return;
   Array.prototype.slice.call(tb1.children).forEach(function(n){ place(n); });
+  var rw=$('reader-research-wrap');   // عنصر بعرض كامل: في آخر مجموعة الذكاء كي تتوازن بقية الأزرار في صفوف مزدوجة
+  if(rw&&groupEls.ai&&rw.parentNode===groupEls.ai.bd&&rw!==groupEls.ai.bd.lastChild) groupEls.ai.bd.appendChild(rw);
   updateCounts();
 }
 
