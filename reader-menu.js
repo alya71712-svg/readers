@@ -108,6 +108,12 @@ function injectCss(){
   '.rm-pair,.rm-gb .tb-pair{grid-column:1/-1;display:grid;grid-template-columns:1fr 1fr;gap:8px}',
   '.rm-gb>.tbtn:last-child:nth-child(odd){grid-column:1/-1}',
   '.rm-gb #save-reader-btn,.rm-gb .tb-pair .tbtn{min-width:0}',
+  /* كل اللوحات الجانبية: تكبير عام (zoom) لأن خطوطها 10–13px؛ لوحة التحليل العميق لها قواعدها الخاصة أدناه */
+  '@media (max-width:700px){',
+  '.rpanel{width:min(460px,97vw)!important}',
+  '.rpanel:not(#aip)>*{zoom:1.3}',
+  '.rpanel:not(#aip) .rp-head .tbtn{min-height:40px}',
+  '}',
   /* لوحة «التحليل العميق»: خط وخانات أكبر لسهولة القراءة على الهاتف */
   '#aip .rp-head{padding:14px 16px}',
   '#aip .rp-head h2{font-size:20px!important}',
