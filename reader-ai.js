@@ -67,9 +67,9 @@ function openModel(){
 }
 // قائمة اختيار المحرك (تُستعمل في اللوحة العلوية وفي نافذة النتيجة، وتبقى متزامنة)
 function provSelect(cls){
-  var x=mk('select',{class:cls,'data-rai':'1','data-rai-prov':'1','aria-label':'محرك الذكاء',translate:'no',
-    title:'اختيار المحرك: Gemini (بحث ويب حيّ مع مصادر) أو ذكاء مجاني (نماذج مفتوحة عبر OpenRouter — تجيب من معرفتها بلا بحث ويب)'},
-    [mk('option',{value:'gemini',text:'🤖 Gemini'}),mk('option',{value:'open',text:'🆓 ذكاء مجاني'})]);
+  var x=mk('select',{class:cls,'data-rai':'1','data-rai-prov':'1','aria-label':'الذكاء المدمج',translate:'no',
+    title:'الذكاء المدمج — اختيار المحرك: Gemini (بحث ويب حيّ مع مصادر) أو ذكاء مجاني (نماذج مفتوحة عبر OpenRouter — تجيب من معرفتها بلا بحث ويب)'},
+    [mk('option',{value:'gemini',text:'🤖 Gemini'}),mk('option',{value:'open',text:'🆓 الذكاء المجاني'})]);
   x.value=getProv();
   x.addEventListener('change',function(){ setProv(x.value); });
   return x;

@@ -98,6 +98,7 @@ function injectCss(){
   '.rm-gb[hidden]{display:none}',
   '.rm-gb .tbtn,.rm-gb .reader-research-trigger{flex:none!important;width:100%;min-height:46px;padding:8px 6px;font-size:14px;white-space:normal;line-height:1.35;',
   '  display:flex;align-items:center;justify-content:center;text-align:center;box-sizing:border-box;touch-action:manipulation}',
+  '.rm-sl{grid-column:1/-1;font-size:13px;color:var(--text2,#9aa);padding:4px 2px 0}',
   '.rm-gb .ai-sel{grid-column:1/-1;width:100%;min-height:46px;font-size:14px;padding:0 8px;box-sizing:border-box;appearance:auto;',
   '  background:var(--bg3,#2a3444);color:var(--blue,#7aa6c6);border:1px solid var(--blue,#7aa6c6);border-radius:4px;font-family:sans-serif}',
   '.rm-gb [onclick*="openAI("]{grid-column:1/-1}',
@@ -162,7 +163,12 @@ function place(n){
     var pid='rm-pair-'+c.pair, pr=g.bd.querySelector('[data-rm-pair="'+c.pair+'"]');
     if(!pr){ pr=mk('div',{class:'rm-pair','data-rm-pair':c.pair,id:pid}); g.bd.appendChild(pr); }
     pr.appendChild(n);
-  }else g.bd.appendChild(n);
+  }else{
+    if(n.tagName==='SELECT'&&n.classList.contains('ai-sel')){   // عنوان القائمة: «الذكاء المدمج»، وخياراتها Gemini / الذكاء المجاني
+      g.bd.appendChild(mk('label',{class:'rm-sl','for':n.id||(n.id='rm-ai-sel'),text:'🧠 الذكاء المدمج — اختر المحرك:'}));
+    }
+    g.bd.appendChild(n);
+  }
   return true;
 }
 function sweep(){
