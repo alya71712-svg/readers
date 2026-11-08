@@ -29,7 +29,7 @@ var GROUPS=[
   {id:'search', ico:'🔍', title:'البحث والفهارس'},
   {id:'read',   ico:'🔖', title:'القراءة والإشارات'},
   {id:'view',   ico:'🎨', title:'العرض والخط', keep:true},   // أزرار تُضغط مراراً (حجم الخط…) فلا يُغلق الدرج بعدها
-  {id:'ai',     ico:'🧠', title:'الذكاء الاصطناعي', keep:true},
+  {id:'ai',     ico:'🧠', title:'الذكاء الاصطناعي'},   // أزرار إجراء: يُغلق الدرج بعدها ليظهر ما فتحته (اختيار المحرك قائمة منسدلة فلا يغلقه)
   {id:'cmp',    ico:'⚡', title:'المقارنة'},
   {id:'share',  ico:'📤', title:'المشاركة والحفظ'},
   {id:'lib',    ico:'📚', title:'المكتبة'},
@@ -218,7 +218,7 @@ function build(){
   back.addEventListener('click',function(){ closeDrawer(); });
   document.addEventListener('keydown',function(e){ if(e.key==='Escape') closeDrawer(); });
 
-  // بعد ضغط أي زر إجراء يُغلق الدرج ليظهر ما فتحه — إلا مجموعات «تبقى» (الخط/الذكاء) ومنصات البحث العلمي (نافذتها تُثبَّت على زرّها)
+  // بعد ضغط أي زر إجراء يُغلق الدرج ليظهر ما فتحه — إلا مجموعة «العرض والخط» ومنصات البحث العلمي (نافذتها تُثبَّت على زرّها)
   drawer.addEventListener('click',function(e){
     var b=e.target.closest&&e.target.closest('button'); if(!b||b.classList.contains('rm-gh')||b.id==='rm-close') return;
     if(b.closest('#reader-research-wrap')) return;
