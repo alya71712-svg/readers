@@ -451,7 +451,7 @@ textarea.ab-inp{resize:vertical;min-height:180px;line-height:1.6;font-family:Geo
 </style>
 <script src="../cloud-config.js?v=1"></script>
 <script src="../cloud-sync.js?v=2"></script>
-<script src="../reader-ai.js?v=7"></script>
+<script src="../reader-ai.js?v=8"></script>
 <script src="../reader-academic.js?v=11"></script>
 </head>
 <body>
@@ -3975,6 +3975,7 @@ function doThemeSearch(){
     hits.forEach(h=>h.bookId=b.id);
     byBook.push({book:b, hits, truncated: (fuzzy && !q2) ? fuzzyCapHit : (hits.length>=SP_MAX_HITS_PER_BOOK || (fuzzy && fuzzyCapHit))});
   });
+  window.__lastThemeSearch = {q:q, q2:q2, fuzzy:fuzzy, rootMode:rootMode, byBook:byBook}; // يقرؤها زر «تصدير النتائج» (reader-ai.js)
   if(!byBook.length){
     res.innerHTML='<div class="empty-panel">'+(q2 ? 'لا صفحة تحوي الكلمتين معاً' : 'لا نتائج لهذا الموضوع'+(rootMode?'<br><span style="font-size:11px">جرّبي تعطيل "بحث بمشتقات الكلمة" لبحث حرفي دقيق</span>':''))+'</div>';
     return;

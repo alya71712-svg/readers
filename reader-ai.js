@@ -202,7 +202,16 @@ var CSS=[
 '#rai-sh-q{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;border-inline-start:3px solid var(--gold,#a80);padding:6px 10px;margin:10px 0;color:var(--text2,#555);font-size:14px;max-height:6.8em;overflow:hidden;line-height:1.7}',
 '#rai-sh label{display:block;margin:10px 0 3px;font-size:13px;font-family:sans-serif;color:var(--text2,#555)}',
 '#rai-sh-in{width:100%;box-sizing:border-box;padding:10px;font-size:16px;border:1px solid var(--border,#ccc);border-radius:4px;background:var(--bg2,#eee);color:var(--text,#111);font-family:inherit}',
-'#rai-sh .row{display:flex;gap:8px;margin-top:14px}#rai-sh .row .tbtn{flex:1;min-height:42px;font-size:15px}'
+'#rai-sh .row{display:flex;gap:8px;margin-top:14px}#rai-sh .row .tbtn{flex:1;min-height:42px;font-size:15px}',
+/* --- نافذة تصدير نتائج البحث (Markdown) --- */
+'#rai-ex{position:fixed;inset:0;z-index:10000;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.55);direction:rtl}',
+'#rai-ex.show{display:flex}',
+'#rai-ex .box{background:var(--bg,#fff);color:var(--text,#111);border:1px solid var(--border,#ccc);border-radius:8px;padding:14px;width:min(94vw,480px);max-height:92vh;overflow:auto}',
+'#rai-ex-info{font-size:13px;line-height:1.7;color:var(--text2,#555);font-family:sans-serif;margin:8px 0}',
+'#rai-ex label{display:block;margin:10px 0 3px;font-size:13px;font-family:sans-serif;color:var(--text2,#555)}',
+'#rai-ex-pad,#rai-ex-q{width:100%;box-sizing:border-box;padding:10px;font-size:16px;border:1px solid var(--border,#ccc);border-radius:4px;background:var(--bg2,#eee);color:var(--text,#111);font-family:inherit}',
+'#rai-ex-prev{width:100%;box-sizing:border-box;height:150px;margin-top:10px;padding:8px;font-size:12.5px;line-height:1.6;direction:rtl;border:1px solid var(--border,#ccc);border-radius:4px;background:var(--bg2,#eee);color:var(--text,#111);resize:vertical}',
+'#rai-ex .row{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}#rai-ex .row .tbtn{flex:1 1 30%;min-height:42px;font-size:15px}'
 ].join('\n');
 
 var ov, els={}, run=null; // run = {ac, mode, snap}
@@ -720,10 +729,225 @@ function installBar(){
   return true;
 }
 
+/* ---------- تصدير نتائج البحث إلى ملف Markdown (العالمي / الموضوعي / ابحث هنا) ---------- */
+// رقم الفقرة يُحسب من الإزاحة في نص الكتاب الخام بدوال الترقيم نفسها التي يرسم بها القارئ شارات الفقرات
+var SX_CAP=2000, sxOv=null, sxEls={}, sxData=null, sxBase='', lastGlobalQ=null, sxOffCache={};
+// عناوين الأقسام في نص الكتاب (==== العنوان ====) لا تدخل المقتطفات كما هي: نحوّلها إلى ⟨العنوان⟩
+function sxFlat(s){ return String(s==null?'':s).replace(/={3,}\s*([^=\n]*?)\s*={3,}/g,' ⟨$1⟩ ').replace(/\s+/g,' ').replace(/\*/g,'\\*'); }
+// القارئ يرقّم الفقرات: في كتب الأقسام (====) على النص الخام، وفي غيرها على «النص المعروض» أي بعد حذف علامات الصفحات
+// (inline أو isolated). لذلك نحوّل موضع النتيجة من الخام إلى المعروض قبل البحث عن فقرته.
+function sxPlan(book){
+  var key=book.id+':'+(book.content||'').length;
+  if(sxOffCache[key]) return sxOffCache[key];
+  var c=book.content||'', plan={offs:[],items:null};
+  try{
+    var sections=extractSections(c);
+    if(sections.length){
+      var lines=c.split('\n'), starts=paragraphStartLines(lines,sections), lineOff=new Array(lines.length+1), o=0, i;
+      for(i=0;i<lines.length;i++){ lineOff[i]=o; o+=lines[i].length+1; }
+      plan.offs=starts.map(function(li){ return lineOff[li]; });
+    }else{
+      var pm=getPageMap(book), disp=c;
+      if(pm&&(pm.mode==='inline'||pm.mode==='isolated')){
+        plan.items=(pm.mode==='inline'?detectInlinePageMarkers(c):detectIsolatedPageMarkers(c)).slice().sort(function(a,b){ return a.start-b.start; });
+        disp=pm.displayContent;
+      }
+      plan.offs=splitParagraphOffsets(disp);
+    }
+  }catch(e){ plan={offs:[],items:null}; }
+  sxOffCache[key]=plan; return plan;
+}
+function sxToDisplayPos(items,pos){
+  var removed=0;
+  for(var i=0;i<items.length;i++){
+    var it=items[i];
+    if(it.end<=pos) removed+=it.end-it.start;
+    else{ if(it.start<pos) return it.start-removed; break; }   // داخل علامة صفحة محذوفة: نقف عند بدايتها
+  }
+  return pos-removed;
+}
+function sxPid(book,pos){
+  var plan=sxPlan(book), offs=plan.offs;
+  if(plan.items) pos=sxToDisplayPos(plan.items,pos);
+  if(!offs.length||pos<offs[0]) return null;
+  var lo=0, hi=offs.length-1;
+  while(lo<hi){ var mid=(lo+hi+1)>>1; if(offs[mid]<=pos) lo=mid; else hi=mid-1; }
+  return lo+1;
+}
+function sxPage(book,pos){ try{ return getPageForOffset(book,pos); }catch(e){ return null; } }
+function sxHtmlToMd(html){
+  // نحوّل <mark> إلى علامات مؤقتة، نفكّ الكيانات ونهرّب النجوم الأصلية، ثم نحوّل العلامات إلى ** (بلا فراغات داخلها)
+  return String(html||'').replace(/<mark>([\s\S]*?)<\/mark>/g,function(_,m){ m=m.trim(); return m?'\u0001'+m+'\u0002':''; })
+    .replace(/<[^>]+>/g,'').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"').replace(/&#0?39;/g,"'").replace(/&amp;/g,'&')
+    .replace(/={3,}\s*([^=\n]*?)\s*={3,}/g,' ⟨$1⟩ ').replace(/\s+/g,' ').replace(/\*/g,'\\*').replace(/\u0001/g,'**').replace(/\u0002/g,'**').trim();
+}
+function sxRecord(book,h,pad){
+  var pos=(typeof h.pos==='number')?h.pos:null, text;
+  if(h.isTwoWord||pos===null||!(h.len>0)){
+    text=typeof renderHitSnippetHtml==='function'?sxHtmlToMd(renderHitSnippetHtml(h)):'…'+sxFlat(h.snip)+'…';
+  }else{
+    var c=book.content||'', s=Math.max(0,pos-pad), e=Math.min(c.length,pos+h.len+pad);
+    var m=sxFlat(c.slice(pos,pos+h.len)).trim();
+    text='…'+sxFlat(c.slice(s,pos))+(m?'**'+m+'**':'')+sxFlat(c.slice(pos+h.len,e))+'…';
+  }
+  return { pid:pos===null?null:sxPid(book,pos), page:h.page!=null?h.page:(pos===null?null:sxPage(book,pos)), text:text };
+}
+function sxMarkdown(d,pad){
+  var L=['# نتائج بحث: «'+sxFlat(d.q)+(d.q2?' + '+sxFlat(d.q2):'')+'»','',
+    '- القارئ: '+(document.title||'القوارئ العشر'),'- نوع البحث: '+d.label];
+  if(d.opts.length) L.push('- الخيارات: '+d.opts.join(' · '));
+  L.push('- العدد: '+d.total+(d.q2?' صفحة':' نتيجة')+' في '+d.groups.length+' كتاب','- تاريخ التصدير: '+new Date().toISOString().slice(0,10));
+  if(d.note) L.push('- ملاحظة: '+d.note);
+  L.push('','> «فقرة N» رقمها كما يظهر في القارئ، و«ص» رقم الصفحة، والكلمة المطابقة بخط عريض. المقتطفات من نص الكتاب كما هو (قد يحوي أخطاء مسح ضوئي).');
+  d.groups.forEach(function(g){
+    L.push('','## '+sxFlat(g.book.title)+' ('+g.hits.length+(g.truncated?'+':'')+')','');
+    g.hits.forEach(function(h,i){
+      var r=sxRecord(g.book,h,pad);
+      L.push((i+1)+'. **'+(r.pid!=null?'فقرة '+r.pid:'بلا رقم فقرة')+(r.page!=null?' · ص '+r.page:'')+'** — '+r.text);
+    });
+  });
+  return L.join('\n');
+}
+function sxGlobal(){
+  if(typeof spGlobalHits==='undefined'||!spGlobalHits||!spGlobalHits.length) return {error:'لا نتائج للتصدير. ابدأ بحثاً أولاً.'};
+  var q=(lastGlobalQ&&lastGlobalQ.q)||($('sp-inp')?$('sp-inp').value.trim():''), q2=(lastGlobalQ&&lastGlobalQ.q2)||'';
+  var map={}, order=[], tb=(typeof spTruncBooks!=='undefined'&&spTruncBooks)||[];
+  spGlobalHits.forEach(function(h){
+    var b=getBookById(h.bookId); if(!b) return;
+    if(!map[h.bookId]){ map[h.bookId]={book:b,hits:[],truncated:tb.indexOf(b.title)>=0}; order.push(map[h.bookId]); }
+    map[h.bookId].hits.push(h);
+  });
+  var opts=[]; if(typeof spFuzzyRun!=='undefined'&&spFuzzyRun) opts.push('بحث ضبابي'); if(q2) opts.push('كلمتان معاً في الصفحة (AND)');
+  return { label:'البحث العالمي', q:q, q2:q2, opts:opts, groups:order, total:spGlobalHits.length,
+    note:(typeof spTruncated!=='undefined'&&spTruncated)?'اقتُطعت نتائج بعض الكتب عند السقف ('+sxCapBook()+' للكتاب) فقد توجد نتائج أخرى.':'' };
+}
+function sxCapBook(){ return typeof SP_MAX_HITS_PER_BOOK!=='undefined'?SP_MAX_HITS_PER_BOOK:200; }
+function sxTheme(){
+  var t=window.__lastThemeSearch;
+  if(!t||!t.byBook||!t.byBook.length) return {error:'لا نتائج للتصدير. ابدأ بحثاً موضوعياً أولاً.'};
+  var opts=[]; if(t.fuzzy) opts.push('بحث ضبابي'); if(t.rootMode) opts.push('بالجذر (وصيغه المشتقة)'); if(t.q2) opts.push('كلمتان معاً في الصفحة (AND)');
+  var total=0, anyTr=false;
+  var groups=t.byBook.map(function(x){ total+=x.hits.length; if(x.truncated) anyTr=true; return {book:x.book,hits:x.hits,truncated:!!x.truncated}; });
+  return { label:'البحث الموضوعي', q:t.q, q2:t.q2||'', opts:opts, groups:groups, total:total,
+    note:anyTr?'اقتُطعت نتائج بعض الكتب عند السقف ('+sxCapBook()+' للكتاب) فقد توجد نتائج أخرى.':'' };
+}
+function sxFind(){
+  var inp=$('find-inp'), q=inp?inp.value.trim():'';
+  if(!q) return {error:'اكتب كلمة في «ابحث هنا» أولاً.'};
+  if(typeof cur==='undefined'||cur<0||!library[cur]) return {error:'افتح كتاباً أولاً.'};
+  var book=library[cur], fuzzy=fuzzyEnabled('find-fuzzy'), ms;
+  try{ fuzzyCapHit=false; }catch(e){}
+  try{ ms=matchesInCleanText(book.content||'',q,{fuzzy:fuzzy}); }catch(e){ return {error:'تعذّر تجهيز النتائج: '+(e&&e.message||e)}; }
+  if(!ms.length) return {error:'لا نتائج لهذه الكلمة في الكتاب المفتوح.'};
+  var capped=ms.length>SX_CAP||(fuzzy&&typeof fuzzyCapHit!=='undefined'&&fuzzyCapHit);
+  var hits=ms.slice(0,SX_CAP).map(function(m){ return {bookId:book.id,pos:m.pos,len:m.len}; });
+  return { label:'ابحث هنا (داخل كتاب واحد)', q:q, q2:'', opts:fuzzy?['بحث ضبابي']:[], groups:[{book:book,hits:hits,truncated:capped}], total:hits.length,
+    note:capped?'اقتُصر الملف على أول '+SX_CAP+' نتيجة (أو بلغ البحث الضبابي سقفه) فقد توجد نتائج أخرى.':'' };
+}
+function sxSlug(s){ return String(s||'').replace(/[^\p{L}\p{N}]+/gu,'-').replace(/^-+|-+$/g,'').slice(0,30)||'بحث'; }
+function sxFull(){
+  var qv=sxEls.q?sxEls.q.value.trim():'';
+  return sxBase+(qv?'\n\n## سؤالي\n'+qv+'\n':'\n');
+}
+function sxRefresh(){
+  if(!sxData) return;
+  var pad=parseInt(sxEls.pad.value,10)||150;
+  sxBase=sxMarkdown(sxData,pad);
+  var kb=Math.max(1,Math.round(new Blob([sxBase]).size/1024));
+  sxEls.info.textContent=sxData.label+' · «'+sxData.q+(sxData.q2?' + '+sxData.q2:'')+'» — '+sxData.total+(sxData.q2?' صفحة':' نتيجة')+' في '+sxData.groups.length+' كتاب · نحو '+kb+' ك.ب'+(sxData.note?' · '+sxData.note:'');
+  sxEls.prev.value=sxBase.length>4000?sxBase.slice(0,4000)+'\n\n… (المعاينة مقتطعة؛ الملف الكامل أطول)':sxBase;
+}
+function sxFilename(){ return 'qawari-search-'+sxSlug(sxData.q)+'-'+new Date().toISOString().slice(0,10)+'.md'; }
+function sxDownload(){
+  var a=mk('a',{href:URL.createObjectURL(new Blob(['﻿'+sxFull()],{type:'text/markdown;charset=utf-8'})),download:sxFilename()});
+  document.body.appendChild(a); a.click();
+  setTimeout(function(){ try{ URL.revokeObjectURL(a.href); }catch(e){} a.remove(); },1500);
+  toast('⬇ نُزّل الملف: '+sxFilename());
+}
+function sxShare(){
+  var text=sxFull(), name=sxFilename(), title='نتائج بحث من القوارئ العشر';
+  try{
+    var f=new File([text],name,{type:'text/markdown'});
+    if(navigator.canShare&&navigator.canShare({files:[f]})){
+      navigator.share({files:[f],title:title}).catch(function(e){ if(e&&e.name!=='AbortError') doShare(title,text); });
+      return;
+    }
+  }catch(e){}
+  doShare(title,text); // الجهاز لا يشارك ملفات: نشارك النص نفسه (أو ننسخه إن لم تتوفر المشاركة)
+}
+function buildSx(){
+  if(sxOv) return;
+  injectCss();
+  sxEls.info=mk('div',{id:'rai-ex-info'});
+  sxEls.pad=mk('select',{id:'rai-ex-pad',onchange:sxRefresh},[['60','قصير (نحو 60 حرفاً حول الكلمة)'],['150','متوسط (نحو 150 حرفاً)'],['300','طويل (نحو 300 حرف)']].map(function(o){
+    var op=mk('option',{value:o[0],text:o[1]}); if(o[0]==='150') op.selected=true; return op; }));
+  sxEls.q=mk('input',{id:'rai-ex-q',type:'text',placeholder:'اكتب سؤالك هنا (اختياري)…',autocomplete:'off',enterkeyhint:'done'});
+  sxEls.prev=mk('textarea',{id:'rai-ex-prev',readonly:'readonly','aria-label':'معاينة الملف'});
+  var row=mk('div',{class:'row'},[
+    mk('button',{type:'button',class:'tbtn',text:'⬇ تنزيل',onclick:sxDownload}),
+    mk('button',{type:'button',class:'tbtn',text:'📤 مشاركة',onclick:sxShare}),
+    mk('button',{type:'button',class:'tbtn',text:'📋 نسخ',onclick:function(){ copyText(sxFull()); toast('✓ نُسخ النص (Markdown)'); }}),
+    mk('button',{type:'button',class:'tbtn',text:'إلغاء',onclick:function(){ sxOv.classList.remove('show'); }})
+  ]);
+  var box=mk('div',{class:'box'},[
+    mk('div',{text:'📄 تصدير نتائج البحث (Markdown)',style:'font-weight:700;font-size:15px'}),
+    sxEls.info,
+    mk('label',{text:'طول السياق حول كل نتيجة'}),sxEls.pad,
+    mk('label',{text:'سؤال إضافي (اختياري) — يُلحَق بنهاية الملف'}),sxEls.q,
+    sxEls.prev,row
+  ]);
+  sxOv=mk('div',{id:'rai-ex',translate:'no',dir:'rtl',role:'dialog','aria-modal':'true',onclick:function(e){ if(e.target===sxOv) sxOv.classList.remove('show'); }},[box]);
+  document.body.appendChild(sxOv);
+}
+function openSx(kind){
+  var d=kind==='theme'?sxTheme():kind==='find'?sxFind():sxGlobal();
+  if(d.error){ toast(d.error); return; }
+  buildSx(); sxData=d; sxEls.q.value=''; sxRefresh(); sxOv.classList.add('show');
+}
+function sxButton(kind){
+  return mk('button',{type:'button',class:'tbtn','data-rai-sx':kind,translate:'no',style:'width:100%;margin:0 0 8px;padding:9px',
+    text:'📄 تصدير النتائج (Markdown)',onclick:function(){ openSx(kind); }});
+}
+function sxWrap(name,before,after){
+  var f=window[name];
+  if(typeof f!=='function') return false;
+  if(f.__sx) return true;
+  var g=function(){
+    if(before){ try{ before(); }catch(e){} }
+    var r=f.apply(this,arguments);
+    try{ after(); }catch(e){}
+    return r;
+  };
+  g.__sx=1; window[name]=g; return true;
+}
+function sxPlace(resId,kind){
+  var res=$(resId); if(!res) return;
+  Array.prototype.forEach.call(res.querySelectorAll('[data-rai-sx]'),function(x){ x.remove(); });
+  res.insertBefore(sxButton(kind),res.firstChild);
+}
+function installSearchExport(){
+  var okSP=sxWrap('doSP',function(){ lastGlobalQ={q:$('sp-inp').value.trim(),q2:($('sp-inp2')?$('sp-inp2').value.trim():'')}; },function(){});
+  var okR=sxWrap('renderSP',null,function(){ if(typeof spGlobalHits!=='undefined'&&spGlobalHits&&spGlobalHits.length) sxPlace('sp-res','global'); });
+  var okT=sxWrap('doThemeSearch',null,function(){
+    var t=window.__lastThemeSearch, res=$('theme-res');
+    if(t&&t.byBook&&t.byBook.length&&res&&res.firstChild) sxPlace('theme-res','theme');
+  });
+  var fb=$('find-bar');
+  if(fb&&!fb.querySelector('[data-rai-sx]')){
+    var b=mk('button',{type:'button',class:'tbtn','data-rai-sx':'find',translate:'no',title:'تصدير نتائج هذا البحث (Markdown) للمشاركة والدراسة',text:'📄',onclick:function(){ openSx('find'); }});
+    var ai=fb.querySelector('[onclick*="renderFindHereAIBox"]');
+    if(ai&&ai.parentNode) ai.parentNode.insertBefore(b,ai.nextSibling); else fb.appendChild(b);
+  }
+  return okSP&&okR&&okT&&!!fb;
+}
+
 function init(){
   // نسخة قارئ محفوظة قد تحمل نافذة/أنماط نسخة سابقة بلا مستمعين: نحذفها فتُبنى من جديد
-  Array.prototype.forEach.call(document.querySelectorAll('#rai-ov, #rai-set, #rai-sh, #rai-style'),function(el){ if(el.parentNode) el.parentNode.removeChild(el); });
+  Array.prototype.forEach.call(document.querySelectorAll('#rai-ov, #rai-set, #rai-sh, #rai-ex, #rai-style'),function(el){ if(el.parentNode) el.parentNode.removeChild(el); });
   injectCss();
+  if(!installSearchExport()){
+    var sn=0, st=setInterval(function(){ if(installSearchExport()||++sn>40) clearInterval(st); },250);
+  }
   if(!installBar()){
     // القارئ يبني الشريط عند التحميل؛ نعيد المحاولة قليلاً
     var n=0, t=setInterval(function(){ if(installBar()||++n>40) clearInterval(t); },250);
