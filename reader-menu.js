@@ -1,4 +1,8 @@
-/* reader-menu.js v1 — القائمة الجانبية المنسدلة للوحة الأدوات العلوية (مشتركة بين القوارئ العشر)
+/* reader-menu.js v8 — القائمة الجانبية المنسدلة للوحة الأدوات العلوية (مشتركة بين القوارئ العشر)
+ *
+ * v8: زر «⬇ تحميل القارئ» في مجموعة المكتبة: تحميل قارئ فارغ (القالب my_reader.html) لتعبئته بالكتب ورفعه كقارئ جديد،
+ *     أو تحميل ملف القارئ الحالي كما هو منشور. الملف المحمَّل تُحوَّل فيه مسارات السكربتات النسبية (../x.js) إلى روابط
+ *     الموقع الكاملة فيعمل على الهاتف والحاسوب، ويبقى صالحاً بعد رفعه إلى مجلد readers.
  *
  * الفكرة: اللوحة العلوية صارت شريطاً نحيفاً فيه الأهم فقط (☰ + بحث عالمي + ابحث هنا + زر «🧰 الأدوات»)،
  * وبقية الأزرار تنتقل — هي نفسها بمعرّفاتها ومستمعيها — إلى درج جانبي مقسَّم إلى مجموعات مطويّة بسهم صغير.
@@ -60,7 +64,7 @@ function classify(n){
   }
   if(n.id==='split-btn'||n.id==='close-compare-btn') return {g:'cmp'};
   if(has(n,/\b(exportCurrentBook|exportUserData)\(/)||n.classList.contains('tb-pair')||n.id==='save-reader-btn') return {g:'share'};
-  if(has(n,/\bopenAddBook\(/)) return {g:'lib'};
+  if(has(n,/\bopenAddBook\(/)||n.id==='rm-download-btn') return {g:'lib'};
   return {g:'other'};
 }
 
@@ -128,9 +132,100 @@ function injectCss(){
   '#aip .ai-btn{font-size:17px!important;min-height:54px;padding:12px!important;line-height:1.4;white-space:normal}',
   '#aip .ai-section>div:not(#ent-tags){font-size:14px!important;margin-top:6px}',
   '#aip .empty-panel{font-size:17px!important;padding:20px!important}',
+  /* نافذة «تحميل القارئ» */
+  '#rm-dl-back{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:720;display:none;align-items:center;justify-content:center;padding:14px}',
+  '#rm-dl-back.show{display:flex}',
+  '#rm-dl{direction:rtl;width:min(94vw,430px);max-height:92vh;max-height:92dvh;overflow-y:auto;background:var(--bg2,#1b2330);color:var(--text,#eee);',
+  '  border:1px solid var(--border,#444);border-radius:10px;padding:14px;font-family:sans-serif;box-shadow:0 8px 30px rgba(0,0,0,.6)}',
+  '#rm-dl-head{display:flex;align-items:center;gap:8px}',
+  '#rm-dl-head strong{flex:1;font-size:17px;color:var(--gold,#c8a45a)}',
+  '#rm-dl-x{min-width:42px;min-height:42px;font-size:18px;background:none;color:inherit;border:1px solid var(--border,#444);border-radius:6px;cursor:pointer}',
+  '.rm-dl-o{display:block;width:100%;text-align:right;margin:10px 0 0;padding:12px;border:1px solid var(--gold,#c8a45a);border-radius:8px;',
+  '  background:var(--bg3,#2a3444);color:inherit;font:inherit;font-size:15px;cursor:pointer;touch-action:manipulation}',
+  '.rm-dl-o strong{display:block;font-size:16px;color:var(--gold,#c8a45a);margin-bottom:4px}',
+  '.rm-dl-o small{display:block;font-size:13px;line-height:1.7;color:var(--text2,#9aa)}',
+  '.rm-dl-o[disabled]{opacity:.55}',
+  '#rm-dl-st{margin-top:12px;font-size:14px;line-height:1.7;min-height:1.4em}',
+  '#rm-dl-note{margin-top:8px;font-size:12px;line-height:1.7;color:var(--text2,#9aa)}',
   '@media (prefers-reduced-motion:reduce){#rm-drawer,#rm-back,.rm-ar{transition:none}}'
   ].join('\n');
   var st=mk('style',{id:'rm-style'}); st.textContent=css; document.head.appendChild(st);
+}
+
+/* ---------- تحميل القارئ ---------- */
+var SITE_BASE='https://alya71712-svg.github.io/readers/';   // جذر الموقع المنشور (حيث توجد سكربتات القوارئ المشتركة)
+var dlBack=null, dlStatus=null, dlBtns=[];
+
+/* مسار ملف يُجلب بنسبة هذه الصفحة (القارئ في readers/ والقالب بجانبه)؛ خارج http(s) (مثل file://) نرجع لعنوان الموقع */
+function fetchUrl(file){
+  try{ if(/^https?:$/.test(location.protocol)) return new URL(file,location.href).href; }catch(e){}
+  return SITE_BASE+'readers/'+file;
+}
+/* السكربتات المشتركة تُحمَّل في القارئات بمسار نسبي (../reader-ai.js…) فلا يعمل الملف خارج مجلد readers؛
+   نحوّلها إلى روابط الموقع الكاملة في النسخة المحمَّلة فقط، فتعمل على الهاتف/الحاسوب وتبقى صالحة بعد الرفع لمجلد readers */
+function absolutizeScripts(html){
+  return html.replace(/(<script\b[^>]*?\bsrc=")\.\.\//g,function(m,a){ return a+SITE_BASE; });
+}
+function setDlStatus(msg,bad){
+  if(!dlStatus) return;
+  dlStatus.textContent=msg||''; dlStatus.style.color=bad?'var(--red,#e07a7a)':'inherit';
+}
+function setDlBusy(b){ dlBtns.forEach(function(x){ if(b) x.setAttribute('disabled',''); else x.removeAttribute('disabled'); }); }
+function saveHtmlFile(name,text){
+  var blob=new Blob([text],{type:'text/html;charset=utf-8'});
+  var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name; a.style.display='none';
+  document.body.appendChild(a); a.click();
+  setTimeout(function(){ try{ URL.revokeObjectURL(a.href); }catch(e){} a.remove(); },60000);
+  return blob.size;
+}
+function fmtSize(n){ return n>=1048576?(n/1048576).toFixed(1)+' ميجابايت':Math.max(1,Math.round(n/1024))+' كيلوبايت'; }
+function downloadReader(kind){
+  var today=new Date().toISOString().slice(0,10), name, url;
+  if(kind==='empty'){ url=fetchUrl('my_reader.html'); name='new_reader_'+today+'.html'; }
+  else{
+    if(!/^https?:$/.test(location.protocol)){ setDlStatus('افتح القارئ من الموقع أولاً ليمكن تحميله، أو اختر «قارئ فارغ».',true); return; }
+    url=location.origin+location.pathname;
+    try{ name=decodeURIComponent(location.pathname.split('/').pop()||''); }catch(e){ name=''; }
+    if(!/\.html?$/i.test(name)) name='reader_'+today+'.html';
+  }
+  setDlBusy(true); setDlStatus('جارٍ التحميل… قد يستغرق ملف كبير بعض الوقت.',false);
+  fetch(url,{cache:'no-store'}).then(function(r){
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    return r.text();
+  }).then(function(html){
+    if(!/<\/html>\s*$/i.test(html)||html.indexOf('<body')<0) throw new Error('الملف المستلم غير مكتمل');
+    var size=saveHtmlFile(name,absolutizeScripts(html));
+    setDlStatus('✓ نزّل المتصفح الملف «'+name+'» ('+fmtSize(size)+'). ابحث عنه في مجلد التنزيلات.',false);
+  }).catch(function(e){
+    setDlStatus('✕ تعذّر التحميل: '+((e&&e.message)||e)+' — تحقق من الاتصال ثم أعد المحاولة.',true);
+  }).then(function(){ setDlBusy(false); });
+}
+function closeDownloadDialog(){ if(dlBack) dlBack.classList.remove('show'); }
+function openDownloadDialog(){
+  if(!dlBack){
+    var x=mk('button',{type:'button',id:'rm-dl-x','aria-label':'إغلاق',text:'✕'});
+    var oEmpty=mk('button',{type:'button',class:'rm-dl-o'},[
+      mk('strong',{text:'📄 قارئ فارغ للتعبئة'}),
+      mk('small',{text:'قالب بلا كتب. أضف إليه كتبك ثم اضغط «📚 حفظ» ليُحفظ الملف بكتبه، ثم ارفعه إلى مجلد readers في المستودع وسجّله في index.html ليظهر قارئاً جديداً في المكتبة.'})]);
+    var oThis=mk('button',{type:'button',class:'rm-dl-o'},[
+      mk('strong',{text:'📥 هذا القارئ كما هو منشور'}),
+      mk('small',{text:'نسخة من ملف هذا القارئ على الموقع (قد يبلغ عشرات الميجابايت). ما أضفتَه بنفسك من كتب يُحفظ عبر «📚 حفظ».'})]);
+    dlStatus=mk('div',{id:'rm-dl-st',role:'status','aria-live':'polite'});
+    var box=mk('div',{id:'rm-dl',role:'dialog','aria-label':'تحميل القارئ'},[
+      mk('div',{id:'rm-dl-head'},[mk('strong',{text:'⬇ تحميل القارئ'}),x]),
+      oEmpty,oThis,dlStatus,
+      mk('div',{id:'rm-dl-note',text:'يعمل الملف المحمَّل على الهاتف أو الحاسوب، لكنه يحتاج اتصالاً بالإنترنت لتحميل سكربتات القارئ المشتركة (القائمة والذكاء والمزامنة) من الموقع.'})]);
+    dlBack=mk('div',{id:'rm-dl-back',translate:'no'},[box]);
+    document.body.appendChild(dlBack);
+    dlBtns=[oEmpty,oThis];
+    oEmpty.addEventListener('click',function(){ downloadReader('empty'); });
+    oThis.addEventListener('click',function(){ downloadReader('this'); });
+    x.addEventListener('click',closeDownloadDialog);
+    dlBack.addEventListener('click',function(e){ if(e.target===dlBack) closeDownloadDialog(); });
+    document.addEventListener('keydown',function(e){ if(e.key==='Escape') closeDownloadDialog(); });
+  }
+  setDlStatus('',false); setDlBusy(false);
+  dlBack.classList.add('show');
 }
 
 /* ---------- البناء ---------- */
@@ -229,6 +324,11 @@ function build(){
     'aria-controls':'rm-drawer',title:'فتح قائمة الأدوات',text:'🧰 الأدوات'});
   openBtn.addEventListener('click',function(e){ e.stopPropagation(); if(drawer.classList.contains('show')) closeDrawer(); else openDrawer(); });
   tb1.appendChild(openBtn);
+
+  // زر التحميل: يُصنَّف تلقائياً في مجموعة «المكتبة» عبر sweep()
+  var dlOpen=mk('button',{type:'button',class:'tbtn',id:'rm-download-btn',translate:'no',title:'تحميل قارئ فارغ للتعبئة، أو تحميل هذا القارئ',text:'⬇ تحميل القارئ'});
+  dlOpen.addEventListener('click',openDownloadDialog);
+  tb1.appendChild(dlOpen);
 
   sweep();
   var saved=openSet();
