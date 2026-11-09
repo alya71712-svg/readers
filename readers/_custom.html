@@ -55,7 +55,11 @@
     var at = html.search(/<\/head>/i);
     if(at < 0) throw new Error('الملف المحفوظ في السحابة غير مكتمل.');
     // بعد الرفع يعرف القارئ أنه مخصّص (زر التحميل يجلب نسخته من السحابة). data-rc-inject تُزال عند أي إعادة رفع.
-    var inj = '<script data-rc-inject>window.__customReaderId=' + JSON.stringify(id) + ';<\/script>'
+    // readers_last_detail يكتبه القارئ بآخر مقطع من المسار (_custom.html لكل القوارئ المخصّصة): نُلحق به ?c=المعرّف
+    // ليتعرّف «تابع القراءة» والمساعد على القارئ الصحيح. يؤثر في هذا المفتاح وحده ولا يغيّر أي شيء آخر.
+    var patch = '(function(){var id=' + JSON.stringify(id) + ',o=Storage.prototype.setItem;'
+      + 'Storage.prototype.setItem=function(k,v){if(k==="readers_last_detail"){try{var d=JSON.parse(v);d.file="_custom.html?c="+id;v=JSON.stringify(d)}catch(e){}}return o.call(this,k,v)}})();';
+    var inj = '<script data-rc-inject>window.__customReaderId=' + JSON.stringify(id) + ';' + patch + '<\/script>'
             + '<script data-rc-inject src="' + SITE + 'reader-custom.js?v=1"><\/script>';
     html = html.slice(0, at) + inj + html.slice(at);
     document.open('text/html', 'replace');

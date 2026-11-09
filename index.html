@@ -1089,7 +1089,7 @@ function openChatSettings(first){
 function openExport(){
   const RB=window.ReaderBridge;
   if(!RB||!RB.exportText){openModal('نسخ إلى Manus',el('p',{text:'وحدة الربط لم تُحمَّل — أعد تحميل الصفحة.'}));return}
-  const rsel=el('select',{class:'chat-field',id:'expReader'},[el('option',{value:'all',text:'كل القوارئ'})].concat(READERS.filter(r=>r.texts&&!r.custom).map(r=>el('option',{value:r.id,text:r.title}))));
+  const rsel=el('select',{class:'chat-field',id:'expReader'},[el('option',{value:'all',text:'كل القوارئ'})].concat(READERS.filter(r=>r.texts).map(r=>el('option',{value:r.id,text:r.title}))));
   const chk=(label,on)=>{const i=el('input',{type:'checkbox'});i.checked=!!on;return {i,row:el('label',{class:'exp-chk'},[i,document.createTextNode(label)])}};
   const cH=chk('تظليلي (مع ملاحظة كل تظليل)',true),cN=chk('ملاحظاتي',true),cB=chk('إشاراتي العادية',false),cP=chk('مواضع توقفي (يحمّل ملفات القوارئ المعنية)',false);
   const filt=el('input',{type:'text',class:'chat-field',placeholder:'مثال: wife أو زوجة',autocomplete:'off'});
@@ -1154,7 +1154,7 @@ function openExport(){
 function openOrganized(){
   const RB=window.ReaderBridge;
   if(!RB||!RB.exportOrganized){openModal('تصدير مرتب',el('p',{text:'وحدة الربط لم تُحمَّل — أعد تحميل الصفحة.'}));return}
-  const rsel=el('select',{class:'chat-field'},[el('option',{value:'all',text:'كل القوارئ'})].concat(READERS.filter(r=>r.texts&&!r.custom).map(r=>el('option',{value:r.id,text:r.title}))));
+  const rsel=el('select',{class:'chat-field'},[el('option',{value:'all',text:'كل القوارئ'})].concat(READERS.filter(r=>r.texts).map(r=>el('option',{value:r.id,text:r.title}))));
   const chk=(label,on)=>{const i=el('input',{type:'checkbox'});i.checked=!!on;return {i,row:el('label',{class:'exp-chk'},[i,document.createTextNode(label)])}};
   const cH=chk('تظليلي',true),cN=chk('ملاحظاتي',true),cB=chk('إشاراتي العادية',false);
   const gsel=el('select',{class:'chat-field'},[['book','حسب الكتاب (بترتيب الفقرات)'],['color','حسب لون التظليل'],['topic','حسب مواضيع أحدّدها بكلمات']].map(([v,t])=>el('option',{value:v,text:t})));
@@ -1215,13 +1215,27 @@ function applyCustom(entries){
   for(let i=READERS.length-1;i>=0;i--)if(READERS[i].custom)READERS.splice(i,1);
   (entries||[]).forEach(e=>{const r=RCu.toReader(e);READERS.push(r);if(typeof READER_KEYS!=='undefined')READER_KEYS[r.id]=r.key});
   if(window.ReaderCloud&&ReaderCloud.addKeys)ReaderCloud.addKeys((entries||[]).map(e=>e.meta&&e.meta.key));
+  // الدردشة والتصدير يقرآن القوارئ عبر الجسر: نمرّر له القائمة الجديدة، ونفرغ ما حمّله إن تغيّرت نسخة أي قارئ
+  const sig=(entries||[]).map(e=>e.id+':'+e.ver).join(',');
+  if(typeof customSig!=='undefined'&&sig!==customSig&&window.ReaderBridge&&ReaderBridge.clearCache)ReaderBridge.clearCache();
+  customSig=sig;
+  if(typeof configureBridge==='function')configureBridge();
   render();
+}
+let customSig;
+// قارئ مضاف من جهاز آخر لا بيانات له هنا بعد: نسحب بياناته مرة واحدة (تظليل/ملاحظات) ليراها المساعد فوراً
+async function pullNewCustomData(entries){
+  const RC=window.ReaderCloud;if(!RC||!RC.syncAll||!RC.getCode())return;
+  let done;try{done=JSON.parse(store.get('readers_custom_pulled_v1')||'[]')}catch{done=[]}
+  const fresh=(entries||[]).filter(e=>e.meta&&e.meta.key&&!done.includes(e.id)&&store.get(e.meta.key)===null);
+  if(!fresh.length)return;
+  try{await RC.syncAll();store.set('readers_custom_pulled_v1',JSON.stringify(done.concat(fresh.map(e=>e.id))))}catch{}
 }
 async function loadCustom(){
   const RCu=window.ReaderCustom;if(!RCu)return;
   try{applyCustom(RCu.cached())}catch{}                      // فوراً من آخر قائمة معروفة (تعمل دون اتصال)
   if(!(window.ReaderCloud&&ReaderCloud.getCode&&ReaderCloud.getCode()))return;
-  try{applyCustom(await RCu.list())}catch{}                  // ثم من السحابة: تظهر هنا قوارئ رُفعت من أي جهاز آخر
+  try{const list=await RCu.list();applyCustom(list);pullNewCustomData(list)}catch{}   // ثم من السحابة: تظهر هنا قوارئ رُفعت من أي جهاز آخر
 }
 function openAdd(){
   const RC=window.ReaderCloud,RCu=window.ReaderCustom;
@@ -1323,7 +1337,12 @@ function openAdd(){
 
 // ---------- البدء ----------
 const READER_KEYS={origen:'myreader_userdata_origen_v1',philo:'myreader_userdata_philo_v1',josephus:'myreader_userdata_josephus_v1',heraclius:'myreader_userdata_heraclius_main_v1','heraclius-other':'myreader_userdata_another_heraclius_v1','filo-leop':'myreader_userdata_filo_leop_v1','heraclius-legend':'myreader_userdata_heraclius_legend_v1',motherhood:'myreader_userdata_motherhood_v1','woman-filo':'myreader_userdata_woman_filo_v1',template:'myreader_userdata_template_base_v1'};
-if(window.ReaderBridge)ReaderBridge.configure({readers:READERS.map(r=>({id:r.id,title:r.title,sub:r.sub,desc:r.desc,texts:r.texts,file:r.file,key:READER_KEYS[r.id]})),budgetChars:30e6,onStatus:t=>{if(chatStatusHook)chatStatusHook(t?(chatToolLabel?chatToolLabel+' — '+t:t):chatToolLabel)}});
+// نصوص القارئ المخصّص تأتي من السحابة (أو نسختها المحلية)، وغيره من ملف الموقع كالمعتاد
+const bridgeFetch=url=>{const m=/_custom\.html\?c=([a-z0-9_-]{1,60})/.exec(url||'');
+  if(m&&window.ReaderCustom)return ReaderCustom.getHtml(m[1]);
+  return fetch(url,{cache:'default'}).then(res=>{if(!res.ok)throw new Error('تعذّر تحميل الملف ('+res.status+')');return res.text()})};
+function configureBridge(){if(window.ReaderBridge)ReaderBridge.configure({fetchText:bridgeFetch,readers:READERS.map(r=>({id:r.id,title:r.title,sub:r.sub,desc:r.desc,texts:r.texts,file:r.file,key:READER_KEYS[r.id]})),budgetChars:30e6,onStatus:t=>{if(chatStatusHook)chatStatusHook(t?(chatToolLabel?chatToolLabel+' — '+t:t):chatToolLabel)}});}
+configureBridge();
 (function init(){
   $('#today').textContent=new Date().toLocaleDateString('ar-EG',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
   applyTheme(store.get(K_THEME)||'earth');
