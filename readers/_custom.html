@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="google" content="notranslate">
+<meta name="theme-color" content="#8b4e3a">
+<title>جارٍ فتح القارئ…</title>
+<style>
+  body{margin:0;min-height:100vh;display:grid;place-items:center;background:#f7f1e7;color:#463728;font-family:system-ui,"Segoe UI",Tahoma,sans-serif}
+  #box{width:min(92vw,420px);text-align:center;padding:24px 18px}
+  #ico{font-size:44px}
+  #msg{margin:14px 0 0;font-size:17px;line-height:1.9}
+  #bar{height:6px;border-radius:6px;background:#ddc8a8;margin:16px 0 0;overflow:hidden}
+  #bar i{display:block;height:100%;width:30%;background:#8b4e3a;animation:mv 1.2s ease-in-out infinite alternate}
+  @keyframes mv{from{margin-inline-start:0}to{margin-inline-start:70%}}
+  .act{display:inline-block;margin:14px 6px 0;padding:11px 18px;border-radius:10px;border:1px solid #8b4e3a;background:#8b4e3a;color:#fff;font-size:16px;text-decoration:none;cursor:pointer;font-family:inherit}
+  .act.sec{background:none;color:#8b4e3a}
+  .err #bar{display:none}
+</style>
+<!-- نفس الاعتماديات التي تحمّلها بقية القوارئ: إعداد السحابة ثم المزامنة ثم هذه المكتبة -->
+<script src="../cloud-config.js?v=1"></script>
+<script src="../cloud-sync.js?v=2"></script>
+<script src="../reader-custom.js?v=1"></script>
+</head>
+<body>
+<div id="box">
+  <div id="ico">📖</div>
+  <p id="msg" role="status" aria-live="polite">جارٍ فتح القارئ من السحابة…</p>
+  <div id="bar"><i></i></div>
+</div>
+<script>
+/* محمّل القوارئ المخصّصة: يجلب ملف القارئ من السحابة ويعرضه في هذه الصفحة نفسها (من نطاق الموقع)،
+   فيعمل التخزين المحلي والمزامنة السحابية فيه كأي قارئ منشور في مجلد readers. */
+(function(){
+  var box = document.getElementById('box'), msg = document.getElementById('msg'), ico = document.getElementById('ico');
+  var id = new URLSearchParams(location.search).get('c') || '';
+  var SITE = 'https://alya71712-svg.github.io/readers/';
+
+  function fail(text, withRetry){
+    box.className = 'err'; ico.textContent = '⚠'; msg.textContent = text;
+    var home = document.createElement('a'); home.className = 'act sec'; home.href = '../index.html'; home.textContent = '🏠 الرئيسية';
+    box.appendChild(home);
+    if(withRetry){
+      var b = document.createElement('button'); b.className = 'act'; b.type = 'button'; b.textContent = '↻ إعادة المحاولة';
+      b.onclick = function(){ location.reload(); }; box.appendChild(b);
+    }
+  }
+  if(!/^[a-z0-9_-]{1,60}$/.test(id)) return fail('رابط القارئ غير صالح.');
+  if(!window.ReaderCustom || !window.ReaderCloud) return fail('تعذّر تحميل ملفات الموقع المشتركة. تحقق من الاتصال.', true);
+  if(!ReaderCloud.getCode()) return fail('هذا الجهاز غير مرتبط برمز المزامنة، فلا أعرف مكتبتك. افتح الصفحة الرئيسية ← ☁ المزامنة وأدخل رمزك.');
+  if(!ReaderCustom.supported()) return fail('متصفحك لا يدعم فكّ الضغط المطلوب. حدّث Chrome أو Safari.');
+
+  ReaderCustom.getHtml(id, function(t){ msg.textContent = t; }).then(function(html){
+    var at = html.search(/<\/head>/i);
+    if(at < 0) throw new Error('الملف المحفوظ في السحابة غير مكتمل.');
+    // بعد الرفع يعرف القارئ أنه مخصّص (زر التحميل يجلب نسخته من السحابة). data-rc-inject تُزال عند أي إعادة رفع.
+    var inj = '<script data-rc-inject>window.__customReaderId=' + JSON.stringify(id) + ';<\/script>'
+            + '<script data-rc-inject src="' + SITE + 'reader-custom.js?v=1"><\/script>';
+    html = html.slice(0, at) + inj + html.slice(at);
+    document.open('text/html', 'replace');
+    document.write(html);
+    document.close();
+  }).catch(function(e){
+    var m = String((e && e.message) || e);
+    if(m === 'no-code') return fail('هذا الجهاز غير مرتبط برمز المزامنة.');
+    if(/no-code|لا يوجد قارئ/.test(m)) return fail(m);
+    fail('تعذّر فتح القارئ: ' + m + ' — تحقق من الاتصال ثم أعد المحاولة.', true);
+  });
+})();
+</script>
+</body>
+</html>

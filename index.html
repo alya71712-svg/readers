@@ -192,7 +192,8 @@ body.panel-hidden .panel-toggle{position:fixed;right:0;top:50%;transform:transla
 <div class="modal-backdrop" id="modalBackdrop" onclick="backdropClose(event)"><div class="modal" id="modal"></div></div>
 
 <script src="cloud-config.js?v=1"></script>
-<script src="cloud-sync.js?v=2"></script>
+<script src="cloud-sync.js?v=3"></script>
+<script src="reader-custom.js?v=1"></script>
 <script src="reader-bridge.js?v=3"></script>
 <script>
 // ============================================================
@@ -312,7 +313,7 @@ function markOpened(r){store.set(K_LAST,JSON.stringify({id:r.id,ts:Date.now()}))
 async function checkFiles(){
   if(!/^https?:$/.test(location.protocol))return;
   statusEl.textContent='جارٍ فحص ملفات القوارئ…';
-  await Promise.all(READERS.map(async r=>{
+  await Promise.all(READERS.filter(r=>!r.custom).map(async r=>{
     try{
       const res=await fetch(r.file,{method:'HEAD',cache:'no-store'});
       availability[r.id]=res.ok;
@@ -1088,7 +1089,7 @@ function openChatSettings(first){
 function openExport(){
   const RB=window.ReaderBridge;
   if(!RB||!RB.exportText){openModal('نسخ إلى Manus',el('p',{text:'وحدة الربط لم تُحمَّل — أعد تحميل الصفحة.'}));return}
-  const rsel=el('select',{class:'chat-field',id:'expReader'},[el('option',{value:'all',text:'كل القوارئ'})].concat(READERS.filter(r=>r.texts).map(r=>el('option',{value:r.id,text:r.title}))));
+  const rsel=el('select',{class:'chat-field',id:'expReader'},[el('option',{value:'all',text:'كل القوارئ'})].concat(READERS.filter(r=>r.texts&&!r.custom).map(r=>el('option',{value:r.id,text:r.title}))));
   const chk=(label,on)=>{const i=el('input',{type:'checkbox'});i.checked=!!on;return {i,row:el('label',{class:'exp-chk'},[i,document.createTextNode(label)])}};
   const cH=chk('تظليلي (مع ملاحظة كل تظليل)',true),cN=chk('ملاحظاتي',true),cB=chk('إشاراتي العادية',false),cP=chk('مواضع توقفي (يحمّل ملفات القوارئ المعنية)',false);
   const filt=el('input',{type:'text',class:'chat-field',placeholder:'مثال: wife أو زوجة',autocomplete:'off'});
@@ -1153,7 +1154,7 @@ function openExport(){
 function openOrganized(){
   const RB=window.ReaderBridge;
   if(!RB||!RB.exportOrganized){openModal('تصدير مرتب',el('p',{text:'وحدة الربط لم تُحمَّل — أعد تحميل الصفحة.'}));return}
-  const rsel=el('select',{class:'chat-field'},[el('option',{value:'all',text:'كل القوارئ'})].concat(READERS.filter(r=>r.texts).map(r=>el('option',{value:r.id,text:r.title}))));
+  const rsel=el('select',{class:'chat-field'},[el('option',{value:'all',text:'كل القوارئ'})].concat(READERS.filter(r=>r.texts&&!r.custom).map(r=>el('option',{value:r.id,text:r.title}))));
   const chk=(label,on)=>{const i=el('input',{type:'checkbox'});i.checked=!!on;return {i,row:el('label',{class:'exp-chk'},[i,document.createTextNode(label)])}};
   const cH=chk('تظليلي',true),cN=chk('ملاحظاتي',true),cB=chk('إشاراتي العادية',false);
   const gsel=el('select',{class:'chat-field'},[['book','حسب الكتاب (بترتيب الفقرات)'],['color','حسب لون التظليل'],['topic','حسب مواضيع أحدّدها بكلمات']].map(([v,t])=>el('option',{value:v,text:t})));
@@ -1207,19 +1208,117 @@ function openOrganized(){
   ]));
 }
 
+// ---------- القوارئ المخصّصة (رفع قارئ جديد تلقائياً) ----------
+const CUSTOM_COLORS=['#8b4e3a','#2563eb','#16805b','#7c4dba','#c94b6b','#a76b25','#0e7490'];
+function applyCustom(entries){
+  const RCu=window.ReaderCustom;if(!RCu)return;
+  for(let i=READERS.length-1;i>=0;i--)if(READERS[i].custom)READERS.splice(i,1);
+  (entries||[]).forEach(e=>{const r=RCu.toReader(e);READERS.push(r);if(typeof READER_KEYS!=='undefined')READER_KEYS[r.id]=r.key});
+  if(window.ReaderCloud&&ReaderCloud.addKeys)ReaderCloud.addKeys((entries||[]).map(e=>e.meta&&e.meta.key));
+  render();
+}
+async function loadCustom(){
+  const RCu=window.ReaderCustom;if(!RCu)return;
+  try{applyCustom(RCu.cached())}catch{}                      // فوراً من آخر قائمة معروفة (تعمل دون اتصال)
+  if(!(window.ReaderCloud&&ReaderCloud.getCode&&ReaderCloud.getCode()))return;
+  try{applyCustom(await RCu.list())}catch{}                  // ثم من السحابة: تظهر هنا قوارئ رُفعت من أي جهاز آخر
+}
 function openAdd(){
-  const li=t=>el('li',{},[t]);
-  const code=t=>el('code',{text:t});
-  const body=el('div',{},[
+  const RC=window.ReaderCloud,RCu=window.ReaderCustom;
+  const say=(t,bad)=>{msg.textContent=t;msg.style.color=bad?'#b3261e':''};
+  const msg=el('div',{class:'status',role:'status',style:'min-height:20px;margin:8px 0'});
+  const body=el('div',{});
+  const manual=()=>el('details',{style:'margin-top:14px'},[
+    el('summary',{text:'الطريقة اليدوية القديمة (بلا سحابة)'}),
     el('ol',{class:'steps'},[
-      el('li',{},['ضع ملف كل قارئ داخل مجلد ',code('readers'),' بجانب ',code('index.html'),' (المستودع نفسه على GitHub).']),
-      li('أسماء الملفات المتوقعة مكتوبة في القائمة READERS أعلى الكود في index.html (حقل file).'),
-      li('لتغيير اسم قارئ أو وصفه أو لونه أو عدد نصوصه: عدّل سطره في تلك القائمة فقط.'),
-      li('لإضافة قارئ جديد: انسخ سطراً كاملاً وغيّر id وtitle وfile.'),
-      li('الملفات الأكبر من 25 ميجا لا يقبلها GitHub عبر الواجهة؛ استخدم الرفع من تطبيق Git أو GitHub Desktop.')
+      el('li',{text:'ضع ملف القارئ داخل مجلد readers بجانب index.html (المستودع على GitHub).'}),
+      el('li',{text:'انسخ سطراً كاملاً من القائمة READERS أعلى الكود في index.html وغيّر id وtitle وfile.'}),
+      el('li',{text:'الملفات الأكبر من 25 ميجا لا يقبلها GitHub عبر الواجهة؛ استخدم Git أو GitHub Desktop.'})
     ])
   ]);
-  openModal('كيف أضيف أو أغيّر قارئاً',body);
+  if(!RCu||!RC||!RC.configured()){
+    body.append(el('p',{text:'الرفع التلقائي يحتاج المزامنة السحابية، وهي غير مفعّلة في هذه النسخة من الموقع.'}),manual());
+    openModal('إضافة قارئ',body);return;
+  }
+  if(!RC.getCode()){
+    body.append(
+      el('p',{text:'الرفع التلقائي مرتبط برمز المزامنة السحابية حتى يظهر القارئ على كل أجهزتك ويُزامَن معها. فعّل المزامنة أولاً ثم ارجع إلى هنا.'}),
+      el('button',{type:'button',text:'☁ تفعيل المزامنة',onclick:()=>openCloud()}),
+      manual());
+    openModal('إضافة قارئ',body);return;
+  }
+  if(!RCu.supported()){
+    body.append(el('p',{text:'متصفحك لا يدعم ضغط الملفات المطلوب للرفع. حدّث Chrome أو Safari ثم أعد المحاولة.'}),manual());
+    openModal('إضافة قارئ',body);return;
+  }
+  const field=(label,input)=>el('div',{style:'margin:8px 0'},[el('label',{text:label,style:'display:block;font-size:13px;margin-bottom:4px'}),input]);
+  const fileInp=el('input',{type:'file',accept:'.html,.htm,text/html',class:'chat-field'});
+  const nameInp=el('input',{type:'text',class:'chat-field',placeholder:'اسم القارئ كما يظهر في المكتبة'});
+  const subInp=el('input',{type:'text',class:'chat-field',dir:'ltr',placeholder:'العنوان بالإنجليزية (اختياري)'});
+  const descInp=el('input',{type:'text',class:'chat-field',placeholder:'وصف قصير (اختياري)'});
+  const colorInp=el('input',{type:'color',value:CUSTOM_COLORS[(READERS.filter(r=>r.custom).length)%CUSTOM_COLORS.length],style:'width:64px;height:40px;padding:2px;border-radius:10px;border:1px solid var(--line);background:var(--cell)'});
+  const info=el('div',{style:'font-size:13px;margin:6px 0;color:var(--muted);line-height:1.8'});
+  const form=el('div',{style:'display:none'});
+  const upBtn=el('button',{type:'button',text:'⬆ رفع إلى المكتبة'});
+  const mine=el('div',{});
+  let fileText='',fileInfo=null;
+  form.append(info,field('الاسم',nameInp),field('العنوان بالإنجليزية',subInp),field('الوصف',descInp),field('لون البطاقة',colorInp),
+    el('div',{class:'modal-footer',style:'justify-content:flex-start'},[upBtn]));
+
+  fileInp.addEventListener('change',async()=>{
+    const f=fileInp.files&&fileInp.files[0];form.style.display='none';fileText='';fileInfo=null;
+    if(!f){say('');return}
+    say('جارٍ قراءة الملف…');
+    try{fileText=await f.text()}catch{say('تعذّرت قراءة الملف.',true);return}
+    fileInfo=RCu.inspect(fileText);
+    if(!fileInfo.ok){say('✕ '+fileInfo.error,true);fileText='';return}
+    const old=fileInfo.existingId&&READERS.find(r=>r.cid===fileInfo.existingId);
+    const t=fileInfo.title;
+    nameInp.value=old?old.title:(/قالب فارغ/.test(t)?'':t);
+    subInp.value=old?old.sub:'';descInp.value=old?old.desc:'';
+    if(old)colorInp.value=old.accent;
+    const mb=(f.size/1048576).toFixed(1);
+    info.textContent=(old?'تحديث قارئ موجود في مكتبتك: «'+old.title+'». ':'قارئ جديد. ')+'فيه '+fileInfo.texts+' نصاً — '+mb+' ميجابايت.'
+      +(fileInfo.texts===0?' ⚠ لا كتب فيه بعد: أضف كتباً داخل القارئ ثم احفظه بزر «📚 حفظ».':'');
+    form.style.display='';say('');
+  });
+
+  upBtn.addEventListener('click',async()=>{
+    if(!fileInfo||!fileText)return;
+    const title=nameInp.value.trim();
+    if(!title){say('اكتب اسماً للقارئ.',true);nameInp.focus();return}
+    upBtn.disabled=true;fileInp.disabled=true;
+    try{
+      const e=await RCu.publish(fileText,{title,sub:subInp.value.trim(),desc:descInp.value.trim(),accent:colorInp.value},t=>say(t));
+      fileText='';fileInfo=null;form.style.display='none';fileInp.value='';
+      applyCustom(await RCu.list().catch(()=>RCu.cached()));
+      say('✓ أُضيف «'+title+'» إلى المكتبة وسيظهر على أجهزتك كلها. تُزامَن بياناته (تظليل وملاحظات ومواضع) تلقائياً كباقي القوارئ.');
+      fillMine();
+    }catch(err){say('✕ '+((err&&err.message)||err),true)}
+    finally{upBtn.disabled=false;fileInp.disabled=false}
+  });
+
+  function fillMine(){
+    mine.replaceChildren();
+    const cs=READERS.filter(r=>r.custom);
+    if(!cs.length)return;
+    mine.append(el('hr'),el('strong',{text:'قوارئي المضافة'}));
+    cs.forEach(r=>mine.append(el('div',{style:'display:flex;align-items:center;gap:8px;margin:8px 0'},[
+      el('a',{href:r.file,text:r.title+' ('+(r.texts||0)+')',style:'flex:1;color:inherit'}),
+      el('button',{type:'button',class:'secondary',text:'🗑 إزالة',onclick:async()=>{
+        if(!confirm('إزالة «'+r.title+'» من المكتبة وكل أجهزتك؟ تبقى تظليلاتك وملاحظاتك محفوظة في السحابة، ولا يُحذف إلا الملف.'))return;
+        say('جارٍ الإزالة…');
+        try{await RCu.remove(r.cid);applyCustom(await RCu.list().catch(()=>RCu.cached()));say('✓ أُزيل القارئ.');fillMine()}
+        catch(err){say('✕ '+((err&&err.message)||err),true)}
+      }})
+    ])));
+  }
+
+  body.append(
+    el('p',{text:'اختر ملف القارئ الذي عبّأته بالكتب (المحفوظ بزر «📚 حفظ»). يُرفع إلى السحابة تلقائياً ويظهر في المكتبة على كل أجهزتك، ويُزامَن كباقي القوارئ: لا حاجة لنسخ ملفات أو تعديل أي كود.'}),
+    fileInp,form,msg,mine,manual());
+  fillMine();
+  openModal('إضافة قارئ جديد',body);
 }
 
 // ---------- البدء ----------
@@ -1233,6 +1332,7 @@ if(window.ReaderBridge)ReaderBridge.configure({readers:READERS.map(r=>({id:r.id,
   qEl.addEventListener('input',render);
   render();
   checkFiles();
+  loadCustom();
 })();
 </script>
 </body>

@@ -1,5 +1,6 @@
-/* reader-menu.js v8 — القائمة الجانبية المنسدلة للوحة الأدوات العلوية (مشتركة بين القوارئ العشر)
+/* reader-menu.js v9 — القائمة الجانبية المنسدلة للوحة الأدوات العلوية (مشتركة بين القوارئ العشر)
  *
+ * v9: القارئ المخصّص (المرفوع من الصفحة الرئيسية) يحمّل نسخته من السحابة بدل ملف الموقع.
  * v8: زر «⬇ تحميل القارئ» في مجموعة المكتبة: تحميل قارئ فارغ (القالب my_reader.html) لتعبئته بالكتب ورفعه كقارئ جديد،
  *     أو تحميل ملف القارئ الحالي كما هو منشور. الملف المحمَّل تُحوَّل فيه مسارات السكربتات النسبية (../x.js) إلى روابط
  *     الموقع الكاملة فيعمل على الهاتف والحاسوب، ويبقى صالحاً بعد رفعه إلى مجلد readers.
@@ -182,6 +183,19 @@ function fmtSize(n){ return n>=1048576?(n/1048576).toFixed(1)+' ميجابايت
 function downloadReader(kind){
   var today=new Date().toISOString().slice(0,10), name, url;
   if(kind==='empty'){ url=fetchUrl('my_reader.html'); name='new_reader_'+today+'.html'; }
+  else if(window.__customReaderId&&window.ReaderCustom){   // قارئ مخصّص: ملفه في السحابة (نسخة محلية إن وُجدت)
+    // اسم لاتيني دائماً: بعض المتصفحات تُسقط الاسم العربي فيخرج الملف بلا امتداد .html فلا يمكن رفعه لاحقاً.
+    // التعرّف على القارئ عند إعادة رفعه يتم من مفتاحه داخل الملف لا من اسمه.
+    var cname='reader_'+window.__customReaderId+'_'+today+'.html';
+    setDlBusy(true); setDlStatus('جارٍ تجهيز الملف…',false);
+    window.ReaderCustom.getHtml(window.__customReaderId,function(t){ setDlStatus(t,false); }).then(function(html){
+      var size=saveHtmlFile(cname,html);
+      setDlStatus('✓ نزّل المتصفح الملف «'+cname+'» ('+fmtSize(size)+'). ابحث عنه في مجلد التنزيلات.',false);
+    }).catch(function(e){
+      setDlStatus('✕ تعذّر التحميل: '+((e&&e.message)||e),true);
+    }).then(function(){ setDlBusy(false); });
+    return;
+  }
   else{
     if(!/^https?:$/.test(location.protocol)){ setDlStatus('افتح القارئ من الموقع أولاً ليمكن تحميله، أو اختر «قارئ فارغ».',true); return; }
     url=location.origin+location.pathname;

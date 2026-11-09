@@ -346,6 +346,8 @@ window.ReaderCloud = {
   status: status, onStatus: function(f){ listeners.push(f); },
   configured: configured, getCode: getCode, setCode: setCode, genCode: genCode, clearCode: clearCode,
   syncAll: syncAll, syncNow: function(){ return runSync('manual'); },
+  /* قوارئ مخصّصة مرفوعة لاحقاً (reader-custom.js): تُضاف مفاتيحها لقائمة syncAll فتُزامَن مع بقية القوارئ */
+  addKeys: function(arr){ (arr || []).forEach(function(k){ if(k && /^myreader_userdata_[a-z0-9_-]{1,80}$/.test(k) && ALL_KEYS.indexOf(k) < 0) ALL_KEYS.push(k); }); },
   _merge: merge, _syncOne: syncOne, _keys: ALL_KEYS
 };
 })();
