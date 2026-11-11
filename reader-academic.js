@@ -7,7 +7,7 @@
 
   const PLATFORMS = [
     { group: 'البحث في الأدبيات والأدلة', items: [
-      { id: 'consensus', mode: 'question', name: 'Consensus', url: 'https://consensus.app/search/', note: 'سؤال طبيعي عن الأدلة العلمية' },
+      { id: 'consensus', mode: 'question', name: 'Consensus', url: 'https://consensus.app/search/', note: 'ألصقي الحزمة؛ يبدأ النص المحدد في أولها' },
       { id: 'elicit', mode: 'question', name: 'Elicit', url: 'https://elicit.com/', note: 'وكيل بحث ومراجعة أدبيات' },
       { id: 'scite', mode: 'question', name: 'Scite Assistant', url: 'https://scite.ai/assistant', note: 'بحث وسياق الاستشهادات الداعمة أو المعارضة' },
       { id: 'scispace', mode: 'question', name: 'SciSpace', url: 'https://scispace.com/search', note: '100 رصيد Agent شهرياً؛ محادثة PDF تتطلب إدخال الورقة' },
@@ -250,6 +250,7 @@
   function buildPrompt(context, platformId) {
     const platform = platformById(platformId);
     const mode = platform ? platform.mode : 'question';
+    if (platformId === 'consensus') return buildConsensusPrompt(context);
     if (mode === 'seed' || mode === 'search') return buildShortQuery(context);
     const text = safeText(context.text).trim();
     let limit = Math.min(text.length, MAX_PASSAGE_CHARS);
@@ -260,6 +261,28 @@
       prompt = buildFullPrompt(context, platformId, limit);
     }
     return prompt;
+  }
+  function buildConsensusPrompt(context) {
+    const arabic = isArabicText(context.text);
+    const question = safeText(state.question).replace(/\s+/g, ' ').trim().slice(0, MAX_QUESTION_CHARS);
+    const passage = clipText(safeText(context.text).replace(/\s+/g, ' '), 1200);
+    const source = [safeText(context.title).trim(), safeText(context.author).trim()].filter(Boolean).join(' — ');
+    const lines = arabic ? [
+      'النص المحدد من القارئ:',
+      '«' + passage + '»',
+      source ? 'المصدر: ' + source : '',
+      '',
+      'السؤال البحثي: ' + (question || 'ما الأدلة العلمية المحكمة أو المصادر الأولية ذات الصلة بهذا النص؟'),
+      'اذكر أدلة مؤيدة ومعارضة وروابط موثوقة عند توفرها. لا تخترع مراجع.'
+    ] : [
+      'Selected passage from the reader:',
+      '“' + passage + '”',
+      source ? 'Source: ' + source : '',
+      '',
+      'Research question: ' + (question || 'What scholarly evidence or primary sources are relevant to this passage?'),
+      'Include evidence for and against, with verifiable links where available. Do not invent references.'
+    ];
+    return lines.filter(Boolean).join('\n');
   }
   function buildFullPrompt(context, platformId, passageLimit) {
     const arabic = isArabicText(context.text);
