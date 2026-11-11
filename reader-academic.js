@@ -208,12 +208,6 @@
     return safeText(context && context.author).trim() || (arabic ? 'غير مذكور في بيانات القارئ' : 'Not specified in reader metadata');
   }
   function paragraphOf(context) { return context && context.pid != null && context.pid !== '' ? String(context.pid) : 'غير محدد'; }
-  function isArabicText(text) {
-    const value = safeText(text);
-    const arabicCount = (value.match(/[\u0600-\u06FF]/g) || []).length;
-    const latinCount = (value.match(/[A-Za-z]/g) || []).length;
-    return arabicCount > 0 && arabicCount >= latinCount * 0.5;
-  }
   function platformById(platformId) {
     return PLATFORMS.flatMap(group => group.items).find(item => item.id === platformId);
   }
@@ -229,23 +223,21 @@
     const question = safeText(state.question).replace(/\s+/g, ' ').trim();
     const passage = clipText(safeText(context.text).replace(/\s+/g, ' '), question ? 120 : SHORT_QUERY_CHARS);
     const title = safeText(context.title).trim();
-    return (title ? title + ' — ' : '') + passage + (question ? ' — ' + clipText(question, 100) : '');
+    const lines = [];
+    if (question) lines.push('السؤال البحثي: ' + clipText(question, 100));
+    if (title) lines.push('المصدر: ' + title);
+    lines.push('ابحث عن أوراق أو مصادر مرتبطة بالمقتطف: «' + passage + '»');
+    return lines.join('\n');
   }
   // نسخة مختصرة تُحمَّل في الرابط العميق لمنصات الأسئلة (الحزمة الكاملة تبقى في الحافظة)،
   // حتى لا يتجاوز الرابط الحد المقبول مع المقتطفات المتوسطة.
   function buildDeepLinkPrompt(context) {
-    const arabic = isArabicText(context.text);
     const q = safeText(state.question).replace(/\s+/g, ' ').trim().slice(0, MAX_QUESTION_CHARS);
     const passage = clipText(safeText(context.text).replace(/\s+/g, ' '), 500);
     const source = [safeText(context.title).trim(), safeText(context.author).trim()].filter(Boolean).join(' — ');
-    if (arabic) {
-      return (q || 'ما مدى دقة الفكرة الواردة في المقتطف التالي، وكيف تفسرها الدراسات والمصادر الأولية؟') +
-        '\nالمقتطف: «' + passage + '»' + (source ? '\nالمصدر: ' + source : '') +
-        '\nاستشهد بمصادر موثقة ولا تخترع مراجع، وابحث بالإنجليزية والفرنسية أيضاً، وأجب بالعربية.';
-    }
-    return (q || 'How accurate is the idea in the following passage, and how do scholarly studies and primary sources interpret it?') +
-      '\nPassage: "' + passage + '"' + (source ? '\nSource: ' + source : '') +
-      '\nCite verifiable sources only, do not invent references, and search in English, French, and German as well.';
+    return (q || 'ما مدى دقة الفكرة الواردة في المقتطف التالي، وكيف تفسرها الدراسات والمصادر الأولية؟') +
+      '\nالمقتطف: «' + passage + '»' + (source ? '\nالمصدر: ' + source : '') +
+      '\nاستشهد بمصادر قابلة للتحقق، ولا تختلق مراجع. ابحث بالإنجليزية والفرنسية والألمانية عند الحاجة، وأجب باللغة العربية.';
   }
   function buildPrompt(context, platformId) {
     const platform = platformById(platformId);
@@ -263,29 +255,20 @@
     return prompt;
   }
   function buildConsensusPrompt(context) {
-    const arabic = isArabicText(context.text);
     const question = safeText(state.question).replace(/\s+/g, ' ').trim().slice(0, MAX_QUESTION_CHARS);
     const passage = clipText(safeText(context.text).replace(/\s+/g, ' '), 1200);
     const source = [safeText(context.title).trim(), safeText(context.author).trim()].filter(Boolean).join(' — ');
-    const lines = arabic ? [
+    const lines = [
       'النص المحدد من القارئ:',
       '«' + passage + '»',
       source ? 'المصدر: ' + source : '',
       '',
-      'السؤال البحثي: ' + (question || 'ما الأدلة العلمية المحكمة أو المصادر الأولية ذات الصلة بهذا النص؟'),
-      'اذكر أدلة مؤيدة ومعارضة وروابط موثوقة عند توفرها. لا تخترع مراجع.'
-    ] : [
-      'Selected passage from the reader:',
-      '“' + passage + '”',
-      source ? 'Source: ' + source : '',
-      '',
-      'Research question: ' + (question || 'What scholarly evidence or primary sources are relevant to this passage?'),
-      'Include evidence for and against, with verifiable links where available. Do not invent references.'
+      'السؤال البحثي: ' + (question || 'ما هي الأدلة العلمية أو المصادر الأولية ذات الصلة بهذا المقطع؟'),
+      'أدرج الأدلة المؤيدة والمعارضة، مع توفير روابط قابلة للتحقق منها حيثما أمكن. لا تختلق المراجع. أجب باللغة العربية.'
     ];
     return lines.filter(Boolean).join('\n');
   }
   function buildFullPrompt(context, platformId, passageLimit) {
-    const arabic = isArabicText(context.text);
     const platform = platformById(platformId);
     const mode = platform ? platform.mode : 'question';
     const text = clipText(context.text, passageLimit);
@@ -295,57 +278,40 @@
     const add = value => lines.push(value);
 
     if (mode === 'source') {
-      add(arabic
-        ? 'حزمة مصدر لإضافتها يدوياً إلى دفتر مصادر. بعد إضافة النص كمصدر، أجب عن السؤال: ما الأدلة العلمية أو المصادر الأولية ذات الصلة بالفكرة، وما حدودها؟'
-        : 'Source packet to add manually to a research notebook. After adding this text as a source, answer: What scholarly evidence or primary sources are relevant to the idea, and what are their limitations?');
+      add('حزمة مصدر لإضافتها يدوياً إلى دفتر مصادر. بعد إضافة النص كمصدر، أجب بالعربية عن السؤال: ما الأدلة العلمية أو المصادر الأولية ذات الصلة بالفكرة، وما حدودها؟');
     } else if (mode === 'document') {
       add(platformId === 'chatpdf'
-        ? (arabic
-          ? 'أضف المقتطف أدناه كمصدر نصي في ChatPDF أو الصقه في مساحة المستند، ثم حلّل حجته ومفاهيمه وأجب عن سؤال بحثي مرتبط به اعتماداً على المصدر. ميّز ما يقوله النص عما لا يثبته.'
-          : 'Add the passage below as a text source in ChatPDF or paste it into the document area. Analyze its argument and concepts, then answer a research question about it using the source. Distinguish what the text says from what it does not establish.')
-        : (arabic
-          ? 'نص مستورد للتلخيص والتنظيم. لخّص المادة المقتبسة أدناه بدقة، واستخرج الفكرة والمصطلحات والادعاءات الأساسية. ميّز ما يقوله النص عما لا يثبته.'
-          : 'Imported text for summarization and organization. Summarize the passage accurately and extract its central idea, terms, and claims. Distinguish what the passage says from what it does not establish.'));
-    } else if (arabic) {
-      add('أجرِ بحثاً أكاديمياً موثقاً للإجابة عن السؤال البحثي الآتي: ' + (q || 'ما مدى دقة الفكرة أو الادعاء الوارد في المقتطف، وكيف تفسره الدراسات والمصادر الأولية ذات الصلة؟'));
-      add('اعرض الأدلة المؤيدة والمعارضة، وميّز بوضوح بين المصادر الأولية والدراسات المحكمة أو الثانوية. أورد الاستشهادات وروابط الناشر أو DOI عند توفرها، واذكر حدود الأدلة والخلافات البحثية. لا تتعامل مع المقتطف بوصفه حقيقة مثبتة، ولا تخترع مراجع.');
+        ? 'أضف المقتطف أدناه كمصدر نصي في ChatPDF أو الصقه في مساحة المستند، ثم حلّل حجته ومفاهيمه وأجب بالعربية عن سؤال بحثي مرتبط به اعتماداً على المصدر. ميّز ما يقوله النص عما لا يثبته.'
+        : 'نص مستورد للتلخيص والتنظيم. لخّص المادة المقتبسة أدناه بالعربية بدقة، واستخرج الفكرة والمصطلحات والادعاءات الأساسية. ميّز ما يقوله النص عما لا يثبته.');
     } else {
-      add('Conduct a source-grounded academic investigation: ' + (q || 'How accurate is the idea or claim in this passage, and how do relevant primary sources and scholarly studies interpret it?'));
-      add('Present evidence for and against the claim. Distinguish primary sources from peer-reviewed or secondary scholarship. Provide citations and publisher or DOI links where available, and explain evidence limits and scholarly disagreements. Do not treat the passage as established fact or invent references.');
+      add('أجرِ بحثاً أكاديمياً موثقاً للإجابة عن السؤال البحثي الآتي: ' + (q || 'ما مدى دقة الفكرة أو الادعاء الوارد في المقتطف، وكيف تفسره الدراسات والمصادر الأولية ذات الصلة؟'));
+      add('اعرض الأدلة المؤيدة والمعارضة، وميّز بوضوح بين المصادر الأولية والدراسات المحكمة أو الثانوية. أورد الاستشهادات وروابط الناشر أو DOI عند توفرها، واذكر حدود الأدلة والخلافات البحثية. لا تتعامل مع المقتطف بوصفه حقيقة مثبتة، ولا تختلق مراجع. أجب باللغة العربية.');
     }
 
-    if (q && (mode === 'source' || mode === 'document')) add((arabic ? 'السؤال المطلوب: ' : 'Requested question: ') + q);
+    if (q && (mode === 'source' || mode === 'document')) add('السؤال المطلوب: ' + q);
 
     add('');
-    add(arabic ? 'بيانات المصدر:' : 'Source context:');
-    add((arabic ? 'الكتاب: ' : 'Book: ') + (context.title || (arabic ? 'غير محدد' : 'Not specified')));
-    add((arabic ? 'المؤلف: ' : 'Author: ') + authorOf(context, arabic));
-    add((arabic ? 'رقم الفقرة في القارئ: ' : 'Paragraph number in reader: ') + paragraphOf(context));
-    add((arabic ? 'المقتطف: «' : 'Passage: “') + text + (arabic ? '»' : '”'));
-    if (context.note && state.includeNotes) add((arabic ? 'ملاحظة القارئ: ' : 'Reader note: ') + safeText(context.note).trim());
-    if (context.kind === 'highlight') add(arabic ? 'نوع المادة: تظليل محفوظ' : 'Selected material: saved highlight');
-    if (context.kind === 'note') add(arabic ? 'نوع المادة: ملاحظة محفوظة' : 'Selected material: saved note');
+    add('بيانات المصدر:');
+    add('الكتاب: ' + (context.title || 'غير محدد'));
+    add('المؤلف: ' + authorOf(context, true));
+    add('رقم الفقرة في القارئ: ' + paragraphOf(context));
+    add('المقتطف: «' + text + '»');
+    if (context.note && state.includeNotes) add('ملاحظة القارئ: ' + safeText(context.note).trim());
+    if (context.kind === 'highlight') add('نوع المادة: تظليل محفوظ');
+    if (context.kind === 'note') add('نوع المادة: ملاحظة محفوظة');
     if (related.notes.length) {
-      add(''); add(arabic ? 'ملاحظات مرتبطة بالفقرة:' : 'Notes linked to this paragraph:');
+      add(''); add('ملاحظات مرتبطة بالفقرة:');
       related.notes.slice(0, 5).forEach(item => add('- ' + safeText(item.text).trim() + (item.text ? ' — ' : '') + safeText(item.note).trim()));
     }
     if (related.highlights.length) {
-      add(''); add(arabic ? 'تظليلات محفوظة مرتبطة بالفقرة:' : 'Saved highlights linked to this paragraph:');
-      related.highlights.slice(0, 5).forEach(item => add('- «' + safeText(item.snip).trim() + '»' + (item.note ? (arabic ? ' — ملاحظة: ' : ' — Note: ') + item.note : '')));
+      add(''); add('تظليلات محفوظة مرتبطة بالفقرة:');
+      related.highlights.slice(0, 5).forEach(item => add('- «' + safeText(item.snip).trim() + '»' + (item.note ? ' — ملاحظة: ' + item.note : '')));
     }
-    if (mode === 'source') add(arabic
-      ? '\nبعد إضافة المصدر إلى الدفتر، اسأل عن الأدلة والاختلافات البحثية مع إحالات قابلة للتحقق.'
-      : '\nAfter adding the source to the notebook, ask about the evidence and research disagreements with verifiable citations.');
-    if (mode === 'document') add(arabic
-      ? '\nلا تضف ادعاءات أو مراجع غير موجودة في النص المستورد.'
-      : '\nDo not add claims or references that are absent from the imported text.');
-    if (mode === 'question' && arabic) {
-      add('\nابحث في الأدبيات بالإنجليزية والفرنسية والألمانية أيضاً، لا بالعربية وحدها، فمعظم الدراسات المحكّمة منشورة بها (ومصطلحات اليونانية واللاتينية للمصادر القديمة عند الحاجة)، وأجب بالعربية.');
+    if (mode === 'source') add('\nبعد إضافة المصدر إلى الدفتر، اسأل عن الأدلة والاختلافات البحثية مع إحالات قابلة للتحقق، وأجب بالعربية.');
+    if (mode === 'document') add('\nلا تضف ادعاءات أو مراجع غير موجودة في النص المستورد، واكتب الإجابة بالعربية.');
+    if (mode === 'question') {
+      add('\nابحث في الأدبيات بالإنجليزية والفرنسية والألمانية أيضاً، لا بالعربية وحدها، فمعظم الدراسات المحكمة منشورة بها (ومصطلحات اليونانية واللاتينية للمصادر القديمة عند الحاجة)، وأجب بالعربية.');
       add('نظّم الإجابة تحت: سؤال محدد، خلاصة الأدلة، المصادر وأنواعها، مواضع الاتفاق والخلاف، وما لا تسمح الأدلة بالجزم به.');
-    }
-    if (mode === 'question' && !arabic) {
-      add('\nSearch the literature in English, French, and German as well, and in Arabic where relevant (and Greek or Latin terms for ancient sources).');
-      add('Organize the response as: focused question, evidence summary, sources and source types, areas of agreement and dispute, and what the evidence cannot establish.');
     }
     return lines.join('\n');
   }
@@ -522,7 +488,7 @@
   }
   function renderPanel() {
     if (!panel) return;
-    panel.innerHTML = '<div class="reader-research-head"><div><strong>🔬 منصات البحث العلمي</strong><div class="reader-research-sub">تُنسخ الحزمة دائماً. المنصات المكتوب عليها «بالاستعلام جاهزاً» تُفتح والنص في رابطها (فيصلها عند الفتح)، والباقي لا يصله شيء حتى تلصقه بنفسك. اضغط ☆ لتثبيت منصة في المفضلة. حدود الاستخدام المجاني قد تتغير؛ أدوات الخرائط تحتاج غالباً ورقة أو DOI، والدفاتر تتطلب إضافة النص كمصدر.</div></div><button type="button" class="reader-research-close" aria-label="إغلاق">×</button></div>' +
+    panel.innerHTML = '<div class="reader-research-head"><div><strong>🔬 منصات البحث العلمي</strong><div class="reader-research-sub">تُنسخ الحزمة دائماً؛ مساعدات الذكاء الاصطناعي تتلقى توجيهاً للإجابة بالعربية، أما محركات وفهارس الأوراق فتعرض النتائج بلغاتها الأصلية. المنصات المكتوب عليها «بالاستعلام جاهزاً» تُفتح والسؤال فيها؛ والباقي الصقي فيه الحزمة المنسوخة. اضغط ☆ لتثبيت منصة في المفضلة. حدود الاستخدام المجاني قد تتغير؛ أدوات الخرائط تحتاج غالباً ورقة أو DOI، والدفاتر تتطلب إضافة النص كمصدر.</div></div><button type="button" class="reader-research-close" aria-label="إغلاق">×</button></div>' +
       '<div class="reader-research-context"></div>' +
       '<div class="reader-research-question-box"><label>سؤالك البحثي (اختياري)<textarea class="reader-research-question" rows="2" maxlength="' + MAX_QUESTION_CHARS + '" placeholder="اتركه فارغاً لاستخدام السؤال الافتراضي: فحص دقة الفكرة"></textarea></label><div class="reader-research-presets">' + PRESETS.map(p => '<button type="button" class="reader-research-chip" data-preset="' + escapeHtml(p.id) + '">' + escapeHtml(p.label) + '</button>').join('') + '</div></div>' +
       '<div class="reader-research-actions"><button type="button" class="reader-research-secondary" data-action="use-selection">استخدام النص المحدد</button><button type="button" class="reader-research-secondary" data-action="show-annotations">اختيار ملاحظة أو تظليل محفوظ</button><button type="button" class="reader-research-secondary" data-action="save-to-file">حفظ في ملف بحث</button><a class="reader-research-secondary" href="../research.html" style="display:inline-block;text-decoration:none">إدارة الملفات</a></div>' +
