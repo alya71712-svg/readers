@@ -146,7 +146,11 @@
     document.addEventListener('mouseup', () => setTimeout(captureSelection, 0));
     document.addEventListener('touchend', () => setTimeout(captureSelection, 50), { passive: true });
     document.addEventListener('pointerdown', event => {
-      if (event.target && event.target.closest && event.target.closest('.reader-research-wrap, .reader-research-popover')) return;
+      if (event.target && event.target.closest && event.target.closest('.reader-research-wrap, .reader-research-popover')) {
+        // On mobile, tapping the toolbar may collapse the browser selection. Snapshot it first.
+        captureSelection();
+        return;
+      }
       if (!isInsideReader(event.target)) {
         // Keep a selection while the user opens our toolbar, but discard it after unrelated actions.
         lastSelection = null;
@@ -636,7 +640,11 @@
     trigger = document.createElement('button'); trigger.type = 'button'; trigger.id = 'reader-research-trigger';
     trigger.className = 'tbtn reader-research-trigger'; trigger.textContent = '🔬 منصات البحث العلمي';
     trigger.setAttribute('aria-haspopup', 'dialog'); trigger.setAttribute('aria-expanded', 'false');
-    trigger.addEventListener('click', event => { event.stopPropagation(); togglePanel(); });
+    trigger.addEventListener('click', event => {
+      captureSelection();
+      event.stopPropagation();
+      togglePanel();
+    });
     root.appendChild(trigger);
     const indexButton = Array.from(toolbar.querySelectorAll('button')).find(button => button.textContent.trim() === '☰');
     if (indexButton && indexButton.parentElement === toolbar) toolbar.insertBefore(root, indexButton.nextSibling);
