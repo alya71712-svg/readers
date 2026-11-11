@@ -4147,9 +4147,10 @@ function cancelNote(){ document.getElementById('note-form').style.display='none'
 function renderNotes(){
   const el=document.getElementById('notes-list'); el.innerHTML='';
   if(!notes.length){ el.innerHTML='<div class="empty-panel">لا ملاحظات بعد — حددي نصاً واضغطي 📝</div>'; return; }
+  let nNums=null; try{ if(window.ReaderNumbers) nNums=ReaderNumbers.forReader(LOCAL_STORAGE_KEY,{bookmarks:bookmarks,notes:notes}); }catch(_e){ nNums=null; }
   notes.forEach((n,i)=>{
     const d=document.createElement('div'); d.className='note-item';
-    d.innerHTML='<button class="del-btn" onclick="delNote('+i+',event)">✕</button><div class="note-item-book">'+escapeHtml(n.book)+'</div><div class="note-item-snip">"'+escapeHtml(n.snip)+'…"</div><div class="note-item-text">'+escapeHtml(n.text)+'</div>';
+    d.innerHTML='<button class="del-btn" onclick="delNote('+i+',event)">✕</button><div class="note-item-book">'+(nNums&&nNums.numOf(true,n.bookId,n.ts)?'<span class="bm-no" title="رقمها في «تصدير مرتب»">'+nNums.numOf(true,n.bookId,n.ts)+'</span>':'')+escapeHtml(n.book)+'</div><div class="note-item-snip">"'+escapeHtml(n.snip)+'…"</div><div class="note-item-text">'+escapeHtml(n.text)+'</div>';
     d.onclick=(e)=>{ if(e.target.classList.contains('del-btn'))return; jumpToSnippet(n.bookId, n.snip, undefined, n.pid); };
     el.appendChild(d);
   });
