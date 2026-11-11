@@ -44,6 +44,17 @@
     .entry label{display:block;font-size:13px;font-weight:700;margin-top:8px}
     .entry textarea{margin-top:4px;min-height:70px;resize:vertical}
     .entry-foot{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:8px}
+    .add-box{border:1px solid var(--line);border-radius:12px;background:var(--soft);padding:12px;margin:0 0 13px}
+    .add-box h3{margin:0 0 6px;font-size:16px}.add-box .meta{margin:0 0 8px}
+    .add-box textarea,.add-box input{margin:4px 0}.add-box textarea{min-height:70px;resize:vertical}
+    .add-row{display:flex;gap:7px;flex-wrap:wrap;align-items:center;margin-top:6px}.add-row input{flex:1 1 150px}
+    .help{padding:11px 13px;border:1px dashed var(--line);border-radius:11px;background:#fffefa;margin:0 0 13px;font-size:14px}
+    .help ol{margin:6px 0 0;padding-inline-start:22px}
+    .pick-list{max-height:46vh;overflow:auto;border:1px solid var(--line);border-radius:10px;background:#fff;margin:6px 0}
+    .pick-row{display:flex;gap:9px;align-items:flex-start;padding:9px;border-bottom:1px dashed var(--line);cursor:pointer;margin:0;font-weight:400}
+    .pick-row input{width:20px;height:20px;flex:none;margin-top:2px}.pick-row.on{background:var(--soft)}
+    .no{flex:none;min-width:32px;padding:1px 7px;border-radius:12px;background:var(--accent);color:#fff;font-weight:700;font-size:13px;text-align:center}
+    .pick-grp{position:sticky;top:0;padding:4px 9px;background:var(--soft);color:var(--accent);font-weight:700;font-size:13px}
     .status{min-height:22px;margin:9px 2px 0;color:var(--accent);font-size:13px}
     .hidden{display:none!important}
     @media(max-width:740px){body{padding:9px}.head{align-items:flex-start;flex-direction:column;padding:15px}.layout{grid-template-columns:1fr}.head-actions{width:100%}.head-actions>*{flex:1}}
@@ -85,6 +96,9 @@
   </main>
 
   <script src="./research-files.js?v=1"></script>
+  <script src="./reader-numbers.js?v=1"></script>
+  <script src="./reader-bridge.js?v=6"></script>
+  <script src="./export-share.js?v=2"></script>
   <script>
     (function(){
       'use strict';
@@ -92,7 +106,10 @@
       const list = document.getElementById('fileList');
       const detail = document.getElementById('detail');
       const status = document.getElementById('status');
-      let activeId = null;
+      let activeId = null, pickerOpen = false;
+      const READER_LIST = [['origen','أوريجانوس السكندري'],['philo','فيلون السكندري'],['josephus','يوسيفوس'],['heraclius','هرقل'],['heraclius-other','مصادر هرقل الأجنبية'],['filo-leop','فيلو — الطبعة الموسّعة'],['heraclius-legend','أسطورة هرقل'],['motherhood','الأمومة'],['woman-filo','المرأة في كتابات فيلو'],['template','القالب الفارغ']];
+      if(window.ReaderBridge && window.ReaderNumbers) window.ReaderBridge.configure({readers: READER_LIST.map((r, i) => ({id:r[0], title:r[1], key:window.ReaderNumbers.KEYS[i]}))});
+      function focusDetail(){ try{ if(window.matchMedia('(max-width:740px)').matches) detail.scrollIntoView({behavior:'smooth', block:'start'}); }catch(_){} }
 
       function el(tag, attrs, children){
         const node = document.createElement(tag);
@@ -112,13 +129,72 @@
         link.href = url; link.download = name; document.body.appendChild(link); link.click();
         setTimeout(() => { URL.revokeObjectURL(url); link.remove(); }, 1000);
       }
+      function manualBox(file){
+        const box = el('div', {className:'add-box'});
+        const text = el('textarea', {rows:'4', maxlength:'6000', placeholder:'اكتبي أو الصقي المقتطف أو الفكرة هنا…', 'aria-label':'نص المقتطف'});
+        const book = el('input', {type:'text', maxlength:'240', placeholder:'المصدر (اختياري): الكتاب أو المؤلف', 'aria-label':'المصدر'});
+        const para = el('input', {type:'text', maxlength:'80', placeholder:'رقم الفقرة (اختياري)', 'aria-label':'رقم الفقرة'});
+        const note = el('textarea', {rows:'2', maxlength:'5000', placeholder:'ملاحظتي (اختياري)', 'aria-label':'ملاحظتي'});
+        const add = el('button', {type:'button', text:'➕ إضافة إلى الملف', onclick:() => {
+          const t = text.value.trim(), n = note.value.trim();
+          if(!t && !n){ say('اكتبي نصاً أو ملاحظة أولاً.'); return; }
+          if(api.addEntry(file.id, {text: t || n, book: book.value, paragraph: para.value, note: t ? n : '', kind: 'manual'})){ say('✓ أُضيف إلى الملف.'); render(); }
+          else say('تعذّرت الإضافة في التخزين المحلي.');
+        }});
+        box.append(el('h3', {text:'✍️ إضافة يدوية'}), el('p', {className:'meta', text:'اكتبي ما تريدين حفظه في هذا الملف.'}), text, el('div', {className:'add-row'}, [book, para]), note, el('div', {className:'add-row'}, [add]));
+        return box;
+      }
+      function pickerBox(file){
+        const box = el('div', {className:'add-box'});
+        const toggle = el('button', {type:'button', className:'secondary', text:(pickerOpen ? '▾ ' : '▸ ') + '📥 إضافة من تظليلاتي وملاحظاتي (بأرقامها)', onclick:() => { pickerOpen = !pickerOpen; render(); }});
+        box.appendChild(toggle);
+        if(!pickerOpen) return box;
+        const RB = window.ReaderBridge, T = window.ExportShare && window.ExportShare._t;
+        if(!RB || !RB.listNumbered || !T){ box.appendChild(el('p', {className:'meta', text:'تعذّر تحميل وحدة التصدير؛ أعيدي تحميل الصفحة.'})); return box; }
+        let items = [];
+        try{ items = RB.listNumbered({reader:'all', kinds:{highlights:true, notes:true, bookmarks:true}, groupBy:'book'}).entries; }catch(e){ box.appendChild(el('p', {className:'meta', text:'تعذّر قراءة التظليلات: ' + e.message})); return box; }
+        if(!items.length){ box.appendChild(el('p', {className:'meta', text:'لا تظليلات أو ملاحظات على هذا المتصفح بعد.'})); return box; }
+        const sel = {}, rows = {}, maxN = items.reduce((m, e) => Math.max(m, e.n), 0);
+        const nums = el('input', {type:'text', dir:'ltr', placeholder:'أرقام: 1,3,5-8', autocomplete:'off', 'aria-label':'أرقام العناصر'});
+        const count = el('span', {className:'meta'});
+        const refresh = () => { count.textContent = 'المحدد ' + Object.keys(sel).length + ' من ' + items.length; Object.keys(rows).forEach(k => rows[k].classList.toggle('on', !!sel[k])); };
+        const setSel = (n, on) => { if(on) sel[n] = 1; else delete sel[n]; rows[n].querySelector('input').checked = !!on; };
+        const list = el('div', {className:'pick-list'});
+        let lastG = null;
+        items.forEach(e => {
+          const g = e.groupTitle; if(g !== lastG){ list.appendChild(el('div', {className:'pick-grp', text:g})); lastG = g; }
+          const cb = el('input', {type:'checkbox', 'aria-label':'العنصر ' + e.n});
+          cb.addEventListener('change', () => { setSel(e.n, cb.checked); nums.value = T.formatNumbers(sel); refresh(); });
+          const kind = e.kind === 'note' ? 'ملاحظة' : e.kind === 'highlight' ? 'تظليل' : 'إشارة';
+          const body = el('div', {}, [el('div', {className:'meta', text:(e.pid != null && !isNaN(e.pid) ? 'فقرة ' + e.pid : 'بلا فقرة') + ' · ' + kind}),
+            el('div', {text:(e.kind === 'note' ? e.note : '«' + (e.text || '') + '»').slice(0, 300)})]);
+          if(e.kind !== 'note' && e.note) body.appendChild(el('div', {className:'meta', text:'↳ ' + e.note.slice(0, 200)}));
+          const row = el('label', {className:'pick-row'}, [cb, el('span', {className:'no', text:String(e.n)}), body]);
+          rows[e.n] = row; list.appendChild(row);
+        });
+        nums.addEventListener('input', () => { const w = T.parseNumbers(nums.value, maxN); items.forEach(e => setSel(e.n, !!w[e.n])); refresh(); });
+        const addBtn = el('button', {type:'button', text:'➕ إضافة المحدد إلى الملف', onclick:() => {
+          const chosen = items.filter(e => sel[e.n]);
+          if(!chosen.length){ say('حدّدي عنصراً واحداً على الأقل.'); return; }
+          let ok = 0;
+          chosen.forEach(e => {
+            const isNote = e.kind === 'note';
+            if(api.addEntry(file.id, {text: isNote ? (e.text || e.note) : (e.text || e.note), reader: e.readerTitle, book: e.book, paragraph: e.pid != null && !isNaN(e.pid) ? e.pid : '', note: e.note && (isNote ? !!e.text : true) ? e.note : '', kind: e.kind})) ok++;
+          });
+          say('✓ أُضيف ' + ok + ' من ' + chosen.length + ' إلى الملف.'); render();
+        }});
+        box.append(el('p', {className:'meta', text:'الأرقام هي نفسها في «تصدير مرتب» وفي لوحتي الإشارات والملاحظات داخل القارئ.'}),
+          el('div', {className:'add-row'}, [nums, count]), list, el('div', {className:'add-row'}, [addBtn]));
+        refresh();
+        return box;
+      }
       function render(){
         const files = api.listFiles();
         if(!files.some(file => file.id === activeId)) activeId = files.length ? files[0].id : null;
         list.replaceChildren();
         if(!files.length) list.appendChild(el('div', {className:'empty', text:'لا توجد ملفات بعد. أنشئي ملفًا، ثم أضيفي إليه مقتطفات من أي قارئ.'}));
         files.forEach(file => {
-          const button = el('button', {type:'button', className:'file-choice' + (file.id === activeId ? ' active' : ''), onclick:() => { activeId = file.id; say(''); render(); }});
+          const button = el('button', {type:'button', className:'file-choice' + (file.id === activeId ? ' active' : ''), onclick:() => { activeId = file.id; say(''); render(); focusDetail(); }});
           button.append(el('strong', {text:file.title}), el('small', {text:file.entries.length + ' مقتطفات'}));
           list.appendChild(button);
         });
@@ -135,6 +211,9 @@
           el('button', {type:'button', className:'secondary', text:'طباعة / PDF', onclick:() => window.print()}),
           el('button', {type:'button', className:'danger', text:'حذف الملف', onclick:() => { if(window.confirm('حذف هذا الملف وكل مقتطفاته من هذا المتصفح؟')){ api.deleteFile(file.id); activeId = null; say('حُذف الملف.'); render(); } }}));
         detail.appendChild(toolbar);
+        detail.appendChild(el('div', {className:'help'}, [el('strong', {text:'كيف أستخدم الملف؟'}), (() => { const ol = el('ol'); ['اكتبي مقتطفاً أو فكرة بنفسك في «إضافة يدوية» أدناه.', 'أو اختاري من تظليلاتك وملاحظاتك بأرقامها (نفس أرقام «تصدير مرتب»).', 'أو من أي قارئ: حدّدي نصاً ← 🔬 منصات البحث العلمي ← «حفظ في ملف بحث».', 'ثم أضيفي «ملاحظتي» تحت كل مقتطف، وصدّري الملف Markdown أو PDF.'].forEach(t => ol.appendChild(el('li', {text:t}))); return ol; })()]));
+        detail.appendChild(manualBox(file));
+        detail.appendChild(pickerBox(file));
         detail.appendChild(el('p', {className:'meta', text:'آخر تحديث: ' + new Date(file.updatedAt || Date.now()).toLocaleString('ar')}));
         const entries = el('div', {className:'entries'});
         if(!file.entries.length) entries.appendChild(el('div', {className:'empty', text:'الملف فارغ. افتحي أحد القرّاء، حدّدي مقتطفًا، ثم اختاري «حفظ في ملف بحث» من لوحة البحث العلمي.'}));
@@ -162,7 +241,7 @@
         const input = document.getElementById('newTitle');
         const file = api.createFile(input.value);
         if(!file){ say('تعذّر إنشاء الملف. تحققي من العنوان أو مساحة التخزين.'); return; }
-        activeId = file.id; input.value = ''; say('أُنشئ ملف البحث.'); render();
+        activeId = file.id; input.value = ''; say('✓ أُنشئ الملف «' + file.title + '» وفُتح أدناه — أضيفي إليه مقتطفاً من الخانات التي ظهرت.'); render(); focusDetail();
       });
       document.getElementById('backup').addEventListener('click', () => download('research-files-backup.json', api.exportBackup(), 'application/json;charset=utf-8'));
       document.getElementById('importButton').addEventListener('click', () => document.getElementById('importFile').click());
