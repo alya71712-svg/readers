@@ -724,21 +724,32 @@ var ORG_CSS = 'body{font-family:"Noto Naskh Arabic","Amiri",Tahoma,sans-serif;li
 // يرقّم العناصر 1..N بترتيب ظهورها في التقسيم المختار؛ الرقم يثبت على العنصر ولا يتغيّر بالتصفية اللاحقة
 function numberEntries(secs){
   var n = 0;
+  secs.forEach(function(sec){ sec.groups.forEach(function(g){ g.entries.forEach(function(e){ if(e.n && e.n > n) n = e.n; }); }); });
   secs.forEach(function(sec){ sec.groups.forEach(function(g){ g.entries.forEach(function(e){ if(!e.n) e.n = ++n; }); }); });
   return n;
+}
+// الأرقام موحّدة مع لوحة «الإشارات المرجعية» في القراء (reader-numbers.js): الترقيم على كل القراء وكل الأنواع، لا على ما اخترته فقط
+function applyNumbers(entries, groupBy, topicsText){
+  var RN = root.ReaderNumbers;
+  if(RN){
+    var all = collectOrganized({ reader: 'all', kinds: { highlights: true, notes: true, bookmarks: true } });
+    var map = RN.assign(all.map(function(e){ return { reader: e.reader, isNote: e.kind === 'note', bookId: e.bookId, book: e.book, pid: e.pid, ts: e.ts }; }), readerOrder);
+    entries.forEach(function(e){ var n = map[RN.idOf(e.reader, e.kind === 'note', e.bookId, e.ts)]; if(n) e.n = n; });
+  }
+  var secs = buildSections(entries, groupBy, topicsText);
+  numberEntries(secs);
+  return secs;
 }
 // قائمة مرقّمة مسطّحة (للواجهة): كل عنصر بنصه وملاحظته ورقمه
 function listNumbered(o){
   o = o || {};
   var groupBy = o.groupBy === 'color' || o.groupBy === 'topic' ? o.groupBy : 'book';
   var entries = collectOrganized(o);
-  var secs = buildSections(entries, groupBy, o.topics);
-  numberEntries(secs);
+  var secs = applyNumbers(entries, groupBy, o.topics);
   var flat = [], seen = {};
   secs.forEach(function(sec){ sec.groups.forEach(function(g){ g.entries.forEach(function(e){
     if(seen[e.n]) return; seen[e.n] = 1; e.groupTitle = g.title; e.sectionTitle = sec.title; flat.push(e);
   }); }); });
-  flat.sort(function(a, b){ return a.n - b.n; });
   return { entries: flat, total: flat.length };
 }
 
@@ -746,7 +757,7 @@ async function exportOrganized(o){
   o = o || {};
   var groupBy = o.groupBy === 'color' || o.groupBy === 'topic' ? o.groupBy : 'book';
   var entries = collectOrganized(o);
-  numberEntries(buildSections(entries, groupBy, o.topics));
+  applyNumbers(entries, groupBy, o.topics);
   var totalAll = entries.length;
   if(Array.isArray(o.pick)){
     var want = {}; o.pick.forEach(function(k){ want[Number(k)] = 1; });

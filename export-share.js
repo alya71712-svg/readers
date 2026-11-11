@@ -186,7 +186,7 @@
 
     var rsel = el('select', { class: 'chat-field' }, [el('option', { value: 'all', text: 'كل القراء' })].concat(ctx.readers.filter(function (r) { return r.texts; }).map(function (r) { return el('option', { value: r.id, text: r.title }); })));
     function chk(label, on) { var i = el('input', { type: 'checkbox' }); i.checked = !!on; return { i: i, row: el('label', { class: 'exp-chk' }, [i, document.createTextNode(label)]) }; }
-    var cH = chk('تظليلي', true), cN = chk('ملاحظاتي', true), cB = chk('إشاراتي العادية', false);
+    var cH = chk('تظليلي', true), cN = chk('ملاحظاتي', true), cB = chk('إشاراتي العادية', true);
     var gsel = el('select', { class: 'chat-field' }, [['book', 'حسب الكتاب (بترتيب الفقرات)'], ['color', 'حسب لون التظليل'], ['topic', 'حسب مواضيع أحدّدها بكلمات']].map(function (a) { return el('option', { value: a[0], text: a[1] }); }));
     var topics = el('textarea', { class: 'chat-field', rows: '3', placeholder: 'موضوع في كل سطر، والكلمات البديلة بفاصلة. مثال:\nالزوجة والجماعة: زوجة, wife\nالحاكم: ملك, king' });
     var topicsBtn = el('button', { type: 'button', class: 'ghost', text: 'تطبيق المواضيع' });
@@ -212,6 +212,7 @@
     var bShare = el('button', { type: 'button', text: '📤 مشاركة عبر التطبيقات' });
 
     var all = [], sel = {}, rows = {};
+    function maxN() { return all.reduce(function (m, e) { return Math.max(m, e.n); }, 0); }
     function selectedItems() { return all.filter(function (e) { return sel[e.n]; }); }
     function say(t) { info.textContent = t; }
 
@@ -261,7 +262,7 @@
     filt.addEventListener('input', function () { clearTimeout(tmr); tmr = setTimeout(reload, 350); });
     topicsBtn.onclick = reload;
     nums.addEventListener('input', function () {
-      var want = parseNumbers(nums.value, all.length);
+      var want = parseNumbers(nums.value, maxN());
       all.forEach(function (e) { setSel(e.n, !!want[e.n]); });
       refreshCount();
     });
@@ -342,7 +343,7 @@
     ctx.openModal('تصدير مرتب ومشاركة البحث', el('div', { class: 'chat-form xs-form' }, [
       el('div', { class: 'manus-brief' }, [
         el('strong', { text: 'اختر ما تريد من تظليلاتك وملاحظاتك بأرقامها' }),
-        el('p', { text: 'كل عنصر له رقم ثابت. حدّد رقماً أو أكثر، واكتب سؤالك البحثي، ثم نزّلها أو شاركها أو أرسلها إلى منصة بحث علمي أو ذكاء اصطناعي. لا يخرج أي نص من جهازك إلا عند ضغطك على «مشاركة» أو على منصة.' })
+        el('p', { text: 'كل عنصر له رقمه نفسه الظاهر بجوار الإشارة في لوحة «الإشارات المرجعية» داخل القارئ (قد تتخطى الأرقام بعض القيم حين تُخفي نوعاً أو تفلتر). حدّد رقماً أو أكثر، واكتب سؤالك البحثي، ثم نزّلها أو شاركها أو أرسلها إلى منصة بحث علمي أو ذكاء اصطناعي. لا يخرج أي نص من جهازك إلا عند ضغطك على «مشاركة» أو على منصة.' })
       ]),
       el('label', { text: 'القارئ' }), rsel,
       el('label', { text: 'ما الذي يُعرض؟' }), cH.row, cN.row, cB.row,

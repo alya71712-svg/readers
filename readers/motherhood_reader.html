@@ -444,6 +444,7 @@ textarea.ab-inp{resize:vertical;min-height:180px;line-height:1.6;font-family:Geo
 <script src="../reader-ai.js?v=10"></script>
 <script src="../research-files.js?v=1"></script>
 <script src="../reader-academic.js?v=16"></script>
+<script src="../reader-numbers.js?v=1"></script>
 <script src="../reader-menu.js?v=9"></script>
 </head>
 <body>
@@ -3952,6 +3953,8 @@ function jumpToSnippet(bookId, snip, ratio, pid){
    محفوظة عبر إعادات renderBM المتكررة (كحذف إشارة من داخل مجموعة). */
 function renderBM(){
   const el=document.getElementById('bm-list'); el.innerHTML='';
+  // رقم كل إشارة = رقمها في «تصدير مرتب» (reader-numbers.js)؛ يُحسب من بيانات كل القراء مع بيانات هذا القارئ الحيّة
+  let bmNums=null; try{ if(window.ReaderNumbers) bmNums=ReaderNumbers.forReader(LOCAL_STORAGE_KEY,{bookmarks:bookmarks,notes:(typeof notes!=='undefined'?notes:[])}); }catch(_e){ bmNums=null; }
   if(!bookmarks.length){ el.innerHTML='<div class="empty-panel">لا إشارات بعد</div>'; return; }
   const byBook = new Map();
   bookmarks.forEach(b=>{ if(!byBook.has(b.bookId)) byBook.set(b.bookId, []); byBook.get(b.bookId).push(b); });
@@ -3969,7 +3972,7 @@ function renderBM(){
         const d=document.createElement('div'); d.className='bmi';
         const dot = b.color ? '<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:'+b.color.replace(',.4)',',1)')+';margin-left:5px;vertical-align:middle"></span>' : '';
         const preview = b.snip.length>80 ? b.snip.slice(0,80)+'…' : b.snip;
-        d.innerHTML='<button class="del-btn" onclick="delBM('+b.ts+',event)">✕</button><button class="bmi-note-btn" type="button" title="ملاحظة على الإشارة">'+(b.note?'📝':'✎')+'</button><div class="bmi-s">'+dot+escapeHtml(preview)+'</div>'+(b.note?'<div class="bmi-note">'+escapeHtml(b.note)+'</div>':'');
+        d.innerHTML='<button class="del-btn" onclick="delBM('+b.ts+',event)">✕</button><button class="bmi-note-btn" type="button" title="ملاحظة على الإشارة">'+(b.note?'📝':'✎')+'</button><div class="bmi-s">'+(bmNums?'<span class="bm-no" title="رقمه في «تصدير مرتب»">'+bmNums.numOf(false,b.bookId,b.ts)+'</span>':'')+dot+escapeHtml(preview)+'</div>'+(b.note?'<div class="bmi-note">'+escapeHtml(b.note)+'</div>':'');
         d.querySelector('.bmi-note-btn').onclick=(ev)=>{ ev.stopPropagation(); openBmNote(b.ts, b.bookId); };
         d.onclick=(e)=>{ if(e.target.closest('.del-btn, .bmi-note-btn'))return; jumpToSnippet(b.bookId, b.snip, b.ratio, b.pid); closePanel('bmp'); };
         body.appendChild(d);
