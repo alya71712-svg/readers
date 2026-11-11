@@ -1,7 +1,7 @@
 {
-  "name": "القوارئ العشر",
-  "short_name": "القوارئ",
-  "description": "مشروع القراء العشر",
+  "name": "القراء العشرة",
+  "short_name": "القراء",
+  "description": "مشروع القراء العشرة",
   "lang": "ar",
   "dir": "rtl",
   "start_url": "./index.html",

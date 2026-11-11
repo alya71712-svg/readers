@@ -1,5 +1,5 @@
 /* ============================================================
-   شريط الذكاء للقوارئ العشر — وحدة مشتركة (ملف واحد لكل القوارئ)
+   شريط الذكاء للقوارئ العشر — وحدة مشتركة (ملف واحد لكل القراء)
    ------------------------------------------------------------
    يضيف شريط أدوات مستقلاً بثلاثة أزرار تعمل على النص المحدد:
      💡 شرح          يشرح النص (معنى، مفردات، أعلام وسياق، التباسات)
@@ -25,7 +25,7 @@ var K_PROV='readers_ai_provider';                 // 'gemini' (الأصل) | 'op
 var K_OMODEL='readers_open_model';                // نفس مفتاح صفحة المحادثة الرئيسية
 var OPEN_DEFAULT='openrouter/free';
 var OPEN_ALT=['google/gemma-4-31b-it:free','google/gemma-4-26b-a4b-it:free','nvidia/nemotron-3-ultra-550b-a55b:free'];
-var HOME_URL='../index.html';                     // لوحة التحكم الرئيسية (القوارئ داخل مجلد readers/)
+var HOME_URL='../index.html';                     // لوحة التحكم الرئيسية (القراء داخل مجلد readers/)
 var CTX_CHARS=700;            // السياق المرسل قبل التحديد وبعده
 var MAX_TEXT=6000;            // أقصى طول للنص المحدد
 var SEL_KEEP_MS=3*60*1000;    // نحتفظ بآخر تحديد هذا الوقت (لأن لمس الزر قد يُلغي التحديد على الجوال)
@@ -333,7 +333,7 @@ function shareText(s,answer,sources,q){
   if(q) L.push('سؤالي: '+q);
   if(answer) L.push('— الجواب —\n'+answer);
   if(sources) L.push('المصادر:\n'+sources);
-  L.push('(من القوارئ العشر: https://alya71712-svg.github.io/readers/)');
+  L.push('(من القراء العشرة: https://alya71712-svg.github.io/readers/)');
   return L.join('\n\n');
 }
 function doShare(title,text){
@@ -357,7 +357,7 @@ function shareOut(){
     src=Array.prototype.map.call(els.src.querySelectorAll('a'),function(a,i){ return (i+1)+'. '+a.textContent.trim()+' — '+a.href; }).join('\n');
   }
   var q=els.q?els.q.value.trim():'';
-  doShare('من القوارئ العشر'+(s.book?' — '+s.book:''),shareText(s,ans,src,q));
+  doShare('من القراء العشرة'+(s.book?' — '+s.book:''),shareText(s,ans,src,q));
 }
 // من اللوحة العلوية: يشارك النص المحدد مع مرجعه مباشرة دون استدعاء أي نموذج
 function shareSelection(){
@@ -412,7 +412,7 @@ function sendShareSheet(copyOnly){
   var text=shareText(s,'','',q);
   closeShareSheet();
   if(copyOnly){ copyText(text); toast('✓ نُسخ النص — الصقه في أي تطبيق'); return; }
-  doShare('من القوارئ العشر'+(s.book?' — '+s.book:''),text);
+  doShare('من القراء العشرة'+(s.book?' — '+s.book:''),text);
 }
 
 /* ---------- التشغيل ---------- */
@@ -712,7 +712,7 @@ function installBar(){
 
   // ٢) زر الرجوع إلى لوحة التحكم الرئيسية (بعد زر ☰ مباشرة)
   var home=mk('button',{type:'button',class:'tbtn',id:'tb-home','data-rai':'1',translate:'no',
-    title:'العودة إلى لوحة التحكم الرئيسية (القوارئ العشر)',text:'🏠 الرئيسية',
+    title:'العودة إلى لوحة التحكم الرئيسية (القراء العشرة)',text:'🏠 الرئيسية',
     onclick:function(){ try{ if(window.ReaderCloud&&ReaderCloud.schedulePush) ReaderCloud.schedulePush(); }catch(e){} location.href=HOME_URL; }});
   var first=null;
   for(var n=tb1.firstChild;n;n=n.nextSibling){ if(n.nodeType===1){ first=n; break; } }
@@ -794,7 +794,7 @@ function sxRecord(book,h,pad){
 }
 function sxMarkdown(d,pad){
   var L=['# نتائج بحث: «'+sxFlat(d.q)+(d.q2?' + '+sxFlat(d.q2):'')+'»','',
-    '- القارئ: '+(document.title||'القوارئ العشر'),'- نوع البحث: '+d.label];
+    '- القارئ: '+(document.title||'القراء العشرة'),'- نوع البحث: '+d.label];
   if(d.opts.length) L.push('- الخيارات: '+d.opts.join(' · '));
   L.push('- العدد: '+d.total+(d.q2?' صفحة':' نتيجة')+' في '+d.groups.length+' كتاب','- تاريخ التصدير: '+new Date().toISOString().slice(0,10));
   if(d.note) L.push('- ملاحظة: '+d.note);
@@ -857,7 +857,7 @@ function sxRefresh(){
   sxEls.info.textContent=sxData.label+' · «'+sxData.q+(sxData.q2?' + '+sxData.q2:'')+'» — '+sxData.total+(sxData.q2?' صفحة':' نتيجة')+' في '+sxData.groups.length+' كتاب · نحو '+kb+' ك.ب'+(sxData.note?' · '+sxData.note:'');
   sxEls.prev.value=sxBase.length>4000?sxBase.slice(0,4000)+'\n\n… (المعاينة مقتطعة؛ الملف الكامل أطول)':sxBase;
 }
-function sxFilename(){ return 'qawari-search-'+sxSlug(sxData.q)+'-'+new Date().toISOString().slice(0,10)+'.md'; }
+function sxFilename(){ return 'readers-search-'+sxSlug(sxData.q)+'-'+new Date().toISOString().slice(0,10)+'.md'; }
 function sxDownload(){
   var a=mk('a',{href:URL.createObjectURL(new Blob(['﻿'+sxFull()],{type:'text/markdown;charset=utf-8'})),download:sxFilename()});
   document.body.appendChild(a); a.click();
@@ -865,7 +865,7 @@ function sxDownload(){
   toast('⬇ نُزّل الملف: '+sxFilename());
 }
 function sxShare(){
-  var text=sxFull(), name=sxFilename(), title='نتائج بحث من القوارئ العشر';
+  var text=sxFull(), name=sxFilename(), title='نتائج بحث من القراء العشرة';
   try{
     var f=new File([text],name,{type:'text/markdown'});
     if(navigator.canShare&&navigator.canShare({files:[f]})){

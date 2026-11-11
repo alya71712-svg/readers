@@ -18,7 +18,7 @@
   .act.sec{background:none;color:#8b4e3a}
   .err #bar{display:none}
 </style>
-<!-- نفس الاعتماديات التي تحمّلها بقية القوارئ: إعداد السحابة ثم المزامنة ثم هذه المكتبة -->
+<!-- نفس الاعتماديات التي تحمّلها بقية القراء: إعداد السحابة ثم المزامنة ثم هذه المكتبة -->
 <script src="../cloud-config.js?v=1"></script>
 <script src="../cloud-sync.js?v=2"></script>
 <script src="../reader-custom.js?v=1"></script>
@@ -30,7 +30,7 @@
   <div id="bar"><i></i></div>
 </div>
 <script>
-/* محمّل القوارئ المخصّصة: يجلب ملف القارئ من السحابة ويعرضه في هذه الصفحة نفسها (من نطاق الموقع)،
+/* محمّل القراء المخصّصة: يجلب ملف القارئ من السحابة ويعرضه في هذه الصفحة نفسها (من نطاق الموقع)،
    فيعمل التخزين المحلي والمزامنة السحابية فيه كأي قارئ منشور في مجلد readers. */
 (function(){
   var box = document.getElementById('box'), msg = document.getElementById('msg'), ico = document.getElementById('ico');
@@ -55,7 +55,7 @@
     var at = html.search(/<\/head>/i);
     if(at < 0) throw new Error('الملف المحفوظ في السحابة غير مكتمل.');
     // بعد الرفع يعرف القارئ أنه مخصّص (زر التحميل يجلب نسخته من السحابة). data-rc-inject تُزال عند أي إعادة رفع.
-    // readers_last_detail يكتبه القارئ بآخر مقطع من المسار (_custom.html لكل القوارئ المخصّصة): نُلحق به ?c=المعرّف
+    // readers_last_detail يكتبه القارئ بآخر مقطع من المسار (_custom.html لكل القراء المخصّصة): نُلحق به ?c=المعرّف
     // ليتعرّف «تابع القراءة» والمساعد على القارئ الصحيح. يؤثر في هذا المفتاح وحده ولا يغيّر أي شيء آخر.
     var patch = '(function(){var id=' + JSON.stringify(id) + ',o=Storage.prototype.setItem;'
       + 'Storage.prototype.setItem=function(k,v){if(k==="readers_last_detail"){try{var d=JSON.parse(v);d.file="_custom.html?c="+id;v=JSON.stringify(d)}catch(e){}}return o.call(this,k,v)}})();';

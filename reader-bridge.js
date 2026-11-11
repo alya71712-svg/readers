@@ -1,12 +1,12 @@
 /* ============================================================
-   جسر القوارئ العشر — يتيح لمحادثة Claude (في الصفحة الرئيسية) الوصول إلى:
-     • بيانات المستخدم التي تحفظها القوارئ في هذا المتصفح (تظليل، إشارات، ملاحظات، مواضع التوقف)
+   جسر القراء العشرة — يتيح لمحادثة Claude (في الصفحة الرئيسية) الوصول إلى:
+     • بيانات المستخدم التي تحفظها القراء في هذا المتصفح (تظليل، إشارات، ملاحظات، مواضع التوقف)
      • نصوص الكتب نفسها، مع البحث فيها وقراءة فقرات بأرقامها (pid) كما تظهر في القارئ.
-   قراءة فقط: لا شيء هنا يكتب في بيانات القوارئ أو يعدّلها.
+   قراءة فقط: لا شيء هنا يكتب في بيانات القراء أو يعدّلها.
 
-   دوال الترقيم أدناه (بين علامتي NUMBERING) منسوخة حرفياً من قوالب القوارئ،
-   وهي متطابقة بايتاً ببايت في القوارئ العشرة، فيتطابق رقم الفقرة هنا مع ما يعرضه القارئ.
-   لا تعدّلها يدوياً؛ إن تغيّر ترقيم الفقرات في القوارئ فانسخ الدوال الجديدة كما هي.
+   دوال الترقيم أدناه (بين علامتي NUMBERING) منسوخة حرفياً من قوالب القراء،
+   وهي متطابقة بايتاً ببايت في القراء العشرة، فيتطابق رقم الفقرة هنا مع ما يعرضه القارئ.
+   لا تعدّلها يدوياً؛ إن تغيّر ترقيم الفقرات في القراء فانسخ الدوال الجديدة كما هي.
    ============================================================ */
 (function(root){
 
@@ -15,7 +15,7 @@ function configure(o){ for(var k in o) CFG[k] = o[k]; }
 function ls(k){ try{ return (CFG.storage || root.localStorage).getItem(k); }catch(e){ return null; } }
 function status(t){ try{ if(CFG.onStatus) CFG.onStatus(t); }catch(e){} }
 
-/* NUMBERING:BEGIN — منسوخ حرفياً من القوارئ */
+/* NUMBERING:BEGIN — منسوخ حرفياً من القراء */
 function extractSections(content){
   const lines = content.split('\n');
   const sections = [];
@@ -146,7 +146,7 @@ function isReliablePageSequence(anchors, contentLength){
 }
 /* NUMBERING:END */
 
-/* مطابق لمنطق getPageMap(book).displayContent في القوارئ (طبقة التقريب/المعايرة لا تغيّر النص المعروض) */
+/* مطابق لمنطق getPageMap(book).displayContent في القراء (طبقة التقريب/المعايرة لا تغيّر النص المعروض) */
 function displayContentOf(content){
   var inl = buildAnchorsFromItems(content, detectInlinePageMarkers(content));
   if(isReliablePageSequence(inl.anchors, content.length)) return inl.display;
@@ -207,7 +207,7 @@ function userOf(r){
   try{ var d = JSON.parse(raw); return (d && d._type === 'my-reader-userdata') ? d : null; }catch(e){ return null; }
 }
 
-/* ---------- تحميل نصوص القوارئ (عند الطلب فقط) ---------- */
+/* ---------- تحميل نصوص القراء (عند الطلب فقط) ---------- */
 var loadCache = {}, pending = {};
 function defaultFetchText(url){
   return fetch(url, { cache: 'default' }).then(function(res){
@@ -509,9 +509,9 @@ function exportHeader(readerId, sourceUrl){
     if(u.protocol === 'https:') source = u.origin + u.pathname;
   }catch(e){}
   return [
-    '# حزمة دراسة من موقع «القوارئ العشر» — جاهزة للمشاركة مع Manus',
+    '# حزمة دراسة من موقع «القراء العشرة» — جاهزة للمشاركة مع Manus',
     'هذه بيانات قراءة وبحث اختار المستخدم تضمينها من مكتبته. «pid» هو رقم الفقرة كما يظهر في القارئ.',
-    'القارئ المحدد: ' + (selected ? selected.title : 'كل القوارئ'),
+    'القارئ المحدد: ' + (selected ? selected.title : 'كل القراء'),
     source ? 'رابط المكتبة: ' + source : '',
     'اعتمد على هذه الحزمة في نقل ما تقوله النصوص، ولا تخترع اقتباساً أو رقم فقرة غير مذكور. إذا كانت المعلومة المطلوبة غير موجودة، فاذكر ذلك بوضوح.',
     'النصوص الأصلية في المكتبة إنجليزية ويونانية ولاتينية وفرنسية في معظمها؛ أجب بالعربية وأبقِ المصطلحات الفنية بين قوسين.'
@@ -597,7 +597,7 @@ async function exportText(o){
 }
 
 /* ---------- تصدير مرتب: ملف Markdown / HTML بكل التظليل والملاحظات (بلا اقتطاع) ---------- */
-// ألوان التظليل في القوارئ مخزَّنة rgba؛ نعطيها أسماء ثابتة بترتيب الظهور
+// ألوان التظليل في القراء مخزَّنة rgba؛ نعطيها أسماء ثابتة بترتيب الظهور
 var COLOR_DEFS = [ { key: '255,238,0', name: 'أصفر', dot: '🟨' }, { key: '140,255,120', name: 'أخضر', dot: '🟩' },
                    { key: '77,225,255', name: 'سماوي', dot: '🟦' }, { key: '255,120,120', name: 'أحمر', dot: '🟥' } ];
 function colorDef(c){
@@ -728,13 +728,13 @@ async function exportOrganized(o){
   var counts = { highlights: 0, notes: 0, bookmarks: 0, total: entries.length };
   entries.forEach(function(e){ counts[e.kind === 'highlight' ? 'highlights' : e.kind === 'note' ? 'notes' : 'bookmarks']++; });
   var secs = buildSections(entries, groupBy, o.topics);
-  var scope = o.reader && o.reader !== 'all' ? ((findReader(o.reader)[0] || {}).title || o.reader) : 'كل القوارئ';
+  var scope = o.reader && o.reader !== 'all' ? ((findReader(o.reader)[0] || {}).title || o.reader) : 'كل القراء';
   var how = groupBy === 'color' ? 'حسب لون التظليل' : groupBy === 'topic' ? 'حسب المواضيع التي حدّدتها' : 'حسب الكتاب وترتيب الفقرات';
   var today = dayOf(Date.now());
   var meta = scope + ' · ' + counts.highlights + ' تظليل · ' + counts.notes + ' ملاحظة · ' + counts.bookmarks + ' إشارة · ترتيب: ' + how + ' · تاريخ التصدير ' + today +
              (o.filter ? ' · فلترة بكلمة «' + oneLine(o.filter) + '»' : '');
-  var md = ['# تصدير مرتب من «القوارئ العشر»', meta, '> رقم الفقرة (pid) كما يظهر في القارئ. النص المقتبس هو المقطع المحفوظ مع التظليل أو الإشارة (قد يكون مقتطعاً من الفقرة).'];
-  var html = ['<h1>تصدير مرتب من «القوارئ العشر»</h1><div class="meta">' + escHtml(meta) + '</div>'];
+  var md = ['# تصدير مرتب من «القراء العشرة»', meta, '> رقم الفقرة (pid) كما يظهر في القارئ. النص المقتبس هو المقطع المحفوظ مع التظليل أو الإشارة (قد يكون مقتطعاً من الفقرة).'];
+  var html = ['<h1>تصدير مرتب من «القراء العشرة»</h1><div class="meta">' + escHtml(meta) + '</div>'];
   if(!entries.length){ md.push('\n(لم يُعثر على بيانات مطابقة لما اخترته.)'); html.push('<p>لم يُعثر على بيانات مطابقة لما اخترته.</p>'); }
   secs.forEach(function(sec){
     if(sec.title){ md.push('\n## ' + sec.title + ' (' + sec.count + ')'); html.push('<h2>' + escHtml(sec.title) + ' (' + sec.count + ')</h2>'); }
@@ -745,8 +745,8 @@ async function exportOrganized(o){
       html.push((sec.title ? '<h3>' : '<h2>') + escHtml(g.title) + ' (' + g.entries.length + ')' + (sec.title ? '</h3>' : '</h2>') + '<ul>' + g.entries.map(htmlEntry).join('') + '</ul>');
     });
   });
-  var page = '<!doctype html><html lang="ar" dir="rtl" translate="no"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="google" content="notranslate"><title>تصدير مرتب — القوارئ العشر</title><style>' + ORG_CSS + '</style></head><body>' + html.join('\n') + '</body></html>';
-  return { markdown: md.join('\n'), html: page, counts: counts, sections: secs.length, filename: 'qawari-' + today };
+  var page = '<!doctype html><html lang="ar" dir="rtl" translate="no"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="google" content="notranslate"><title>تصدير مرتب — القراء العشرة</title><style>' + ORG_CSS + '</style></head><body>' + html.join('\n') + '</body></html>';
+  return { markdown: md.join('\n'), html: page, counts: counts, sections: secs.length, filename: 'readers-' + today };
 }
 
 /* ---------- تعريف الأدوات لواجهة Anthropic ---------- */

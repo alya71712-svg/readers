@@ -1,10 +1,10 @@
 /* ============================================================
-   المزامنة السحابية للقوارئ العشر — وحدة مشتركة (ملف واحد لكل القوارئ)
+   المزامنة السحابية للقوارئ العشر — وحدة مشتركة (ملف واحد لكل القراء)
    ------------------------------------------------------------
    ما الذي يُزامَن: الإشارات المرجعية والتظليل (التظليل = إشارة لها لون)،
    الملاحظات، المواضيع المحفوظة، حالة "تمت قراءته"، وموضع القراءة.
    الحفظ المحلي في المتصفح يبقى كما هو؛ هذه الوحدة طبقة فوقه:
-     • تعمل بلا حساب: رمز مزامنة سرّي واحد يشترك فيه كل جهازك وكل القوارئ.
+     • تعمل بلا حساب: رمز مزامنة سرّي واحد يشترك فيه كل جهازك وكل القراء.
      • الدمج لا يفقد شيئاً: اتحاد الإشارات من الجهازين، والحذف يُنقل
        بواسطة "شواهد حذف" (tombstones) كي لا تعود إشارة محذوفة.
      • إن تعذّر الاتصال تبقى البيانات محلياً وتُرسل لاحقاً تلقائياً.
@@ -305,7 +305,7 @@ function attach(opts){
 }
 function quiet(fn){ quietDepth++; try{ fn(); } finally{ quietDepth--; } }
 
-/* ---------- مزامنة كل القوارئ من الصفحة الرئيسية (بلا فتح أي قارئ) ---------- */
+/* ---------- مزامنة كل القراء من الصفحة الرئيسية (بلا فتح أي قارئ) ---------- */
 function localAdapter(key){
   var raw = lsGet(key), data = null;
   try{ data = JSON.parse(raw || 'null'); }catch(e){}
@@ -346,7 +346,7 @@ window.ReaderCloud = {
   status: status, onStatus: function(f){ listeners.push(f); },
   configured: configured, getCode: getCode, setCode: setCode, genCode: genCode, clearCode: clearCode,
   syncAll: syncAll, syncNow: function(){ return runSync('manual'); },
-  /* قوارئ مخصّصة مرفوعة لاحقاً (reader-custom.js): تُضاف مفاتيحها لقائمة syncAll فتُزامَن مع بقية القوارئ */
+  /* قوارئ مخصّصة مرفوعة لاحقاً (reader-custom.js): تُضاف مفاتيحها لقائمة syncAll فتُزامَن مع بقية القراء */
   addKeys: function(arr){ (arr || []).forEach(function(k){ if(k && /^myreader_userdata_[a-z0-9_-]{1,80}$/.test(k) && ALL_KEYS.indexOf(k) < 0) ALL_KEYS.push(k); }); },
   _merge: merge, _syncOne: syncOne, _keys: ALL_KEYS
 };

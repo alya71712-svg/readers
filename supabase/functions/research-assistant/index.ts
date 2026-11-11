@@ -1,4 +1,4 @@
-// دالة Supabase Edge: وسيط آمن بين موقع القوارئ العشر ومزوّدي النماذج (xAI/Grok وOpenRouter وGemini).
+// دالة Supabase Edge: وسيط آمن بين موقع القراء العشرة ومزوّدي النماذج (xAI/Grok وOpenRouter وGemini).
 //
 // لماذا وسيط؟ المفاتيح تبقى سراً هنا ولا تظهر في الموقع ولا في GitHub.
 // الأسرار المطلوبة (Supabase ← Edge Functions ← Secrets):
@@ -11,7 +11,7 @@
 //                          مثل: deepseek/,moonshotai/  (أنصح به بدل ALLOW_PAID)
 //   OPENROUTER_ALLOW_PAID  اختياري: اجعله 1 للسماح بكل النماذج المدفوعة. الأصل: المسموح فقط وسم :free أو openrouter/free،
 //                          فلا يستطيع أحد استهلاك رصيدك حتى لو وضعت فيه مالاً.
-//   GEMINI_API_KEY         مفتاح Google AI Studio — لازم لاستعمال Gemini (المحادثة + أزرار شرح/بحث/بحث عميق في القوارئ)
+//   GEMINI_API_KEY         مفتاح Google AI Studio — لازم لاستعمال Gemini (المحادثة + أزرار شرح/بحث/بحث عميق في القراء)
 //   GEMINI_MODEL           اختياري: النموذج الأول في السلسلة (الأصل gemini-3.8-flash)
 //   GEMINI_DEEP_MODEL      اختياري: نموذج مستقل للبحث العميق (الأصل = GEMINI_MODEL)
 //   GEMINI_CHAIN           اختياري: سلسلة نماذج مفصولة بفاصلة من الأعلى إلى الأقل (تُجرَّب بالترتيب عند نفاد الحصة أو التعثر)

@@ -5,12 +5,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="theme-color" content="#8b4e3a">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="القوارئ العشر">
+<meta name="apple-mobile-web-app-title" content="القراء العشرة">
 <meta name="google" content="notranslate">
 <link rel="manifest" href="./manifest.webmanifest">
 <link rel="icon" href="./icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="./icon.svg">
-<title>القوارئ العشر | مشروع القراء العشر</title>
+<title>القراء العشرة | مشروع القراء العشرة</title>
 <style>
 :root{--font-size:15px;--bg:#f7f1e7;--paper:#fffdf8;--ink:#463728;--muted:#7a6a58;--accent:#8b4e3a;--accent2:#6e3b2b;--line:#ddc8a8;--cell:#fff;--soft:#fff4df;--shadow:0 14px 40px rgba(15,23,42,.10)}
 *{box-sizing:border-box}
@@ -157,7 +157,7 @@ body.panel-hidden .panel-toggle{position:fixed;right:0;top:50%;transform:transla
 <div class="app">
   <div class="paper">
     <header class="topbar">
-      <div class="brand"><div class="brand-mark">📖</div><div><h1>القوارئ العشر</h1><p class="subtitle">مشروع القراء العشر — قارئ لكل مؤلف أو موضوع</p></div></div>
+      <div class="brand"><div class="brand-mark">📖</div><div><h1>القراء العشرة</h1><p class="subtitle">مشروع القراء العشرة — قارئ لكل مؤلف أو موضوع</p></div></div>
       <div class="date-box"><span class="date-label">تاريخ اليوم</span><span class="today" id="today"></span></div>
       <div class="font-control"><button class="font-button" type="button" onclick="toggleFontMenu()" title="التحكم في حجم الخط" aria-label="التحكم في حجم الخط">A</button><div class="font-menu" id="fontMenu"><span class="font-menu-title">حجم خط البطاقات</span><div class="font-actions"><button type="button" onclick="changeFontSize(-1)">−</button><span class="font-value" id="fontValue">15</span><button type="button" onclick="changeFontSize(1)">+</button></div></div></div>
     </header>
@@ -165,7 +165,7 @@ body.panel-hidden .panel-toggle{position:fixed;right:0;top:50%;transform:transla
       <section class="workspace">
         <div class="resume" id="resume"><div><b id="resumeTitle"></b><small id="resumeWhen"></small></div><button type="button" id="resumeBtn">تابع القراءة</button></div>
         <div class="section-title"><h2>اختر القارئ</h2><span class="hint" id="countHint"></span></div>
-        <div class="search-row"><input id="q" type="search" placeholder="ابحث باسم القارئ أو المؤلف أو الموضوع…" autocomplete="off" aria-label="بحث في القوارئ"></div>
+        <div class="search-row"><input id="q" type="search" placeholder="ابحث باسم القارئ أو المؤلف أو الموضوع…" autocomplete="off" aria-label="بحث في القراء"></div>
         <div class="grid" id="grid"></div>
         <div class="status" id="status" role="status"></div>
       </section>
@@ -179,6 +179,7 @@ body.panel-hidden .panel-toggle{position:fixed;right:0;top:50%;transform:transla
           <button class="nav-btn" type="button" onclick="openCloud()" title="المزامنة السحابية"><span class="nav-icon">☁</span>المزامنة</button>
           <button class="nav-btn" type="button" onclick="openChat()" title="محادثة (نماذج مفتوحة أو Gemini أو Grok أو Claude)"><span class="nav-icon">💬</span>محادثة</button>
           <button class="nav-btn" type="button" onclick="openOrganized()" title="تصدير التظليل والملاحظات مرتباً بالكتاب أو اللون أو الموضوع"><span class="nav-icon">📑</span>تصدير مرتب</button>
+          <a class="nav-btn" href="./research.html" title="إنشاء ملفات بحث من مقتطفات القراء"><span class="nav-icon">📁</span>ملفات البحث</a>
           <button class="nav-btn" type="button" onclick="openExport()" title="نسخ إلى Manus"><span class="nav-icon">📋</span>نسخ Manus</button>
           <a class="nav-btn" href="https://manus.im/" target="_blank" rel="noopener noreferrer" title="افتح Manus للدراسة" aria-label="افتح Manus في تبويب جديد للدراسة"><span class="nav-icon">↗</span>فتح Manus</a>
         </div>
@@ -194,10 +195,10 @@ body.panel-hidden .panel-toggle{position:fixed;right:0;top:50%;transform:transla
 <script src="cloud-config.js?v=1"></script>
 <script src="cloud-sync.js?v=3"></script>
 <script src="reader-custom.js?v=1"></script>
-<script src="reader-bridge.js?v=3"></script>
+<script src="reader-bridge.js?v=4"></script>
 <script>
 // ============================================================
-// قائمة القوارئ العشر — عدّل هذه القائمة فقط لتغيير ما يظهر في الموقع.
+// قائمة القراء العشرة — عدّل هذه القائمة فقط لتغيير ما يظهر في الموقع.
 // file: مسار ملف القارئ نسبةً لهذه الصفحة (ضعها في مجلد readers/)
 // texts: عدد النصوص داخل القارئ (للعرض فقط)  |  accent: لون شريط البطاقة
 // ============================================================
@@ -205,10 +206,10 @@ const READERS=[
  {id:'origen',   title:'أوريجانوس السكندري',      sub:'Origen',                 desc:'نصوص أوريجانوس ومراجعها — الإسكندرية في القرن الثالث.',                 texts:54, accent:'#8B4E3A', file:'readers/origen_reader.html'},
  {id:'philo',    title:'فيلون السكندري',           sub:'Philo of Alexandria',    desc:'أعمال فيلون، وفيها التأويل الرمزي (الزوج = الحاكم، الزوجة = الجماعة).',   texts:49, accent:'#5B6F94', file:'readers/philo_reader.html'},
  {id:'josephus', title:'يوسيفوس',                  sub:'Flavius Josephus',       desc:'نصوص يوسيفوس المؤرخ اليهودي الروماني.',                                    texts:31, accent:'#C9A84C', file:'readers/josephus_reader.html'},
- {id:'heraclius',title:'هرقل',                      sub:'Heraclius',              desc:'المصادر الأساسية لعصر الإمبراطور هرقل وحروبه مع الفرس.',                  texts:19, accent:'#7A3B5E', file:'readers/heraclius_reader.html'},
+ {id:'heraclius',title:'هرقل',                      sub:'Heraclius',              desc:'المصادر الأساسية لعصر الإمبراطور هرقل وحروبه مع الفرس.',                  texts:17, accent:'#7A3B5E', file:'readers/heraclius_reader.html'},
  {id:'heraclius-other',title:'مصادر هرقل الأجنبية',sub:'Heraclius — other sources',desc:'مصادر بالإنجليزية والفرنسية والإسبانية والبولندية.',                  texts:19, accent:'#2F6F73', file:'readers/another_heraclius_reader.html'},
  {id:'filo-leop',title:'فيلو — الطبعة الموسّعة',      sub:'Philo — extended edition',desc:'طبعة موسّعة من نصوص فيلو الإسكندراني.',                                  texts:14, accent:'#4A7C59', file:'readers/filo_leop_reader.html'},
- {id:'heraclius-legend',title:'أسطورة هرقل',       sub:'Heraclius legend',       desc:'نصوص الأسطورة والتراث الشعبي حول هرقل.',                                    texts:11, accent:'#B5651D', file:'readers/heraclius_legend_reader.html'},
+ {id:'heraclius-legend',title:'أسطورة هرقل',       sub:'Heraclius legend',       desc:'نصوص الأسطورة والتراث الشعبي حول هرقل.',                                    texts:12, accent:'#B5651D', file:'readers/heraclius_legend_reader.html'},
  {id:'motherhood',title:'الأمومة',                  sub:'Motherhood',             desc:'نصوص عن الأمومة في التراث القديم.',                                         texts:8,  accent:'#C0506B', file:'readers/motherhood_reader.html'},
  {id:'woman-filo',title:'المرأة في كتابات فيلو',   sub:'Woman in Philo',         desc:'كتابات فيلو عن المرأة والجماعة.',                                           texts:8,  accent:'#4A5E8A', file:'readers/woman_in_filo_writers_reader.html'},
  {id:'template', title:'القالب الفارغ',             sub:'my_reader',              desc:'قارئ بلا كتب، يُنسخ منه أي قارئ جديد.',                                     texts:0,  accent:'#64748B', file:'readers/my_reader.html'}
@@ -261,7 +262,7 @@ const norm=s=>String(s||'').toLowerCase().replace(/[ً-ٰٟـ]/g,'').replace(/[�
 function getDetail(){try{const v=JSON.parse(store.get('readers_last_detail')||'null');return v&&v.file?v:null}catch{return null}}
 function getLast(){
   let v=null;try{v=JSON.parse(store.get(K_LAST)||'null');if(!(v&&v.id))v=null}catch{v=null}
-  // لو سجّل أحد القوارئ موضعاً أحدث (آخر كتاب وفقرة) نعتمده — ويحمل اسم الكتاب ورقم الفقرة
+  // لو سجّل أحد القراء موضعاً أحدث (آخر كتاب وفقرة) نعتمده — ويحمل اسم الكتاب ورقم الفقرة
   const d=getDetail(),r=d&&READERS.find(x=>x.file.split('/').pop()===d.file);
   if(r&&(!v||d.ts>=v.ts))return {id:r.id,ts:d.ts,detail:d};
   if(v&&d&&READERS.find(x=>x.id===v.id)?.file.split('/').pop()===d.file)v.detail=d;
@@ -312,7 +313,7 @@ function markOpened(r){store.set(K_LAST,JSON.stringify({id:r.id,ts:Date.now()}))
 // ---------- فحص وجود الملفات (على الاستضافة فقط) ----------
 async function checkFiles(){
   if(!/^https?:$/.test(location.protocol))return;
-  statusEl.textContent='جارٍ فحص ملفات القوارئ…';
+  statusEl.textContent='جارٍ فحص ملفات القراء…';
   await Promise.all(READERS.filter(r=>!r.custom).map(async r=>{
     try{
       const res=await fetch(r.file,{method:'HEAD',cache:'no-store'});
@@ -370,7 +371,7 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal()});
 function openStats(){
   const total=READERS.reduce((s,r)=>s+(r.texts||0),0),filled=READERS.filter(r=>r.texts>0).length;
   const row=(a,b)=>el('div',{class:'stat-row'},[el('span',{text:a}),el('b',{text:String(b)})]);
-  const body=el('div',{},[row('عدد القوارئ',READERS.length),row('قوارئ فيها نصوص',filled),row('مجموع النصوص',total)]);
+  const body=el('div',{},[row('عدد القراء',READERS.length),row('قوارئ فيها نصوص',filled),row('مجموع النصوص',total)]);
   READERS.filter(r=>r.texts>0).sort((a,b)=>b.texts-a.texts).forEach(r=>body.appendChild(row(r.title,r.texts)));
   openModal('إحصاءات المكتبة',body);
 }
@@ -379,7 +380,7 @@ function openCloud(){
   if(!RC||!RC.configured()){
     openModal('المزامنة السحابية',el('div',{},[
       el('p',{text:'المزامنة السحابية غير مفعّلة بعد. أنشئي الجدول في Supabase بتشغيل ملف supabase-setup.sql مرة واحدة، ثم ضعي المفتاح العام (Publishable key) في ملف cloud-config.js.'}),
-      el('p',{text:'إلى ذلك الحين تعمل القوارئ كما كانت: الحفظ على هذا المتصفح فقط.'})
+      el('p',{text:'إلى ذلك الحين تعمل القراء كما كانت: الحفظ على هذا المتصفح فقط.'})
     ]));
     return;
   }
@@ -420,10 +421,10 @@ function openCloud(){
         el('button',{type:'button',class:'secondary',text:'نسخ الرمز',onclick:async()=>{try{await navigator.clipboard.writeText(fmt(code));say('✓ نُسخ الرمز')}catch{say('تعذّر النسخ — أظهري الرمز وانسخيه يدوياً')}}})
       ]),
       el('p',{text:st.lastOk?('آخر مزامنة ناجحة من قارئ مفتوح: '+ago(st.lastOk)):'يزامن كل قارئ نفسه تلقائياً عند فتحه وبعد كل تظليل أو إشارة.'}),
-      el('button',{type:'button',text:'مزامنة كل القوارئ الآن',onclick:async()=>{
+      el('button',{type:'button',text:'مزامنة كل القراء الآن',onclick:async()=>{
         say('جارٍ المزامنة…');
         const r=await RC.syncAll((i,n)=>say('جارٍ المزامنة… '+i+' / '+n)); const ok=r.filter(x=>x.ok).length;
-        say(ok===r.length?'✓ تمت مزامنة القوارئ العشر.':'⚠ نجحت '+ok+' من '+r.length+' — أعيدي المحاولة عند توفر اتصال أفضل.');
+        say(ok===r.length?'✓ تمت مزامنة القراء العشرة.':'⚠ نجحت '+ok+' من '+r.length+' — أعيدي المحاولة عند توفر اتصال أفضل.');
       }}),
       el('hr'),
       el('button',{type:'button',class:'secondary',text:'فصل هذا الجهاز عن السحابة',onclick:()=>{
@@ -471,7 +472,7 @@ function thinkFilter(emit){
 }
 const K_GEMKEY='readers_gemini_key',K_GEMMODEL='readers_gemini_model',GEM_DEFAULT='gemini-3.8-flash',GEM_OLD='gemini-2.5-flash';
 const K_CKEY='readers_claude_key',K_CMODEL='readers_claude_model',K_CSYS='readers_claude_system',K_CHIST='readers_claude_history';
-const CHAT_SYS_DEFAULT='أنت مساعد بحثي داخل موقع «القوارئ العشر» لنصوص الإسكندرية القديمة (أوريجانوس وفيلون ويوسيفوس وهرقل ومصادرهم). أجب بالعربية، وأبقِ المصطلحات الفنية بين قوسين، وميّز بوضوح بين ما تقوله المصادر وما هو استنتاج، ولا تخترع اقتباسات أو أرقام فقرات.';
+const CHAT_SYS_DEFAULT='أنت مساعد بحثي داخل موقع «القراء العشرة» لنصوص الإسكندرية القديمة (أوريجانوس وفيلون ويوسيفوس وهرقل ومصادرهم). أجب بالعربية، وأبقِ المصطلحات الفنية بين قوسين، وميّز بوضوح بين ما تقوله المصادر وما هو استنتاج، ولا تخترع اقتباسات أو أرقام فقرات.';
 const CHAT_MAX_SEND=30,CHAT_MAX_KEEP=60;
 let chatHist=[],chatAbort=null,chatEpoch=0;
 
@@ -557,7 +558,7 @@ function mdRender(src,box){
   }
 }
 
-const TOOL_GUIDE='\n\nلديك أدوات تصل بها إلى مكتبة المستخدم في «القوارئ العشر»: list_library وget_user_data وsearch_texts وread_passage. استخدمها بدل التخمين: ابحث في النصوص قبل أن تنسب قولاً لمصدر، واقتبس من نتائج الأدوات فقط مع ذكر القارئ والكتاب ورقم الفقرة (pid) كما يظهر في القارئ. إن لم تجد شيئاً فقل ذلك صراحةً ولا تخترع نصاً أو رقم فقرة. نصوص المكتبة إنجليزية ويونانية ولاتينية وفرنسية في معظمها وفيها عربي قليل جداً، فترجم كلمات البحث التي يكتبها المستخدم بالعربية إلى لغة النص (الإنجليزية غالباً، واليونانية بحروفها) ثم اشرح له بالعربية. النصوص مستخرجة بمسح ضوئي وقد تحوي أخطاء، فجرّب تهجئات ولغات أخرى قبل أن تستنتج الغياب. عند السؤال عن تظليل المستخدم أو ملاحظاته أو إشاراته أو موضع توقفه فاقرأها بـ get_user_data. ابدأ بنطاق ضيّق (reader/book) كلما أمكن لأن البحث في كل القوارئ ثقيل على الجهاز.';
+const TOOL_GUIDE='\n\nلديك أدوات تصل بها إلى مكتبة المستخدم في «القراء العشرة»: list_library وget_user_data وsearch_texts وread_passage. استخدمها بدل التخمين: ابحث في النصوص قبل أن تنسب قولاً لمصدر، واقتبس من نتائج الأدوات فقط مع ذكر القارئ والكتاب ورقم الفقرة (pid) كما يظهر في القارئ. إن لم تجد شيئاً فقل ذلك صراحةً ولا تخترع نصاً أو رقم فقرة. نصوص المكتبة إنجليزية ويونانية ولاتينية وفرنسية في معظمها وفيها عربي قليل جداً، فترجم كلمات البحث التي يكتبها المستخدم بالعربية إلى لغة النص (الإنجليزية غالباً، واليونانية بحروفها) ثم اشرح له بالعربية. النصوص مستخرجة بمسح ضوئي وقد تحوي أخطاء، فجرّب تهجئات ولغات أخرى قبل أن تستنتج الغياب. عند السؤال عن تظليل المستخدم أو ملاحظاته أو إشاراته أو موضع توقفه فاقرأها بـ get_user_data. ابدأ بنطاق ضيّق (reader/book) كلما أمكن لأن البحث في كل القراء ثقيل على الجهاز.';
 const TOOL_LABELS={
   list_library:()=>'📚 يطّلع على المكتبة…',
   get_user_data:i=>'🖍 يقرأ '+({highlights:'تظليلك',bookmarks:'إشاراتك',notes:'ملاحظاتك',positions:'مواضع توقفك',summary:'ملخص بياناتك'}[i&&i.kind]||'بياناتك')+'…',
@@ -977,7 +978,7 @@ function openChat(){
   ]),el('div'));
   modal.classList.add('chat-modal');
   if(chatHist.length)chatHist.forEach(m=>addBubble(m.role,m.content,m.model));
-  else list.appendChild(el('div',{class:'chat-empty',text:'اسأل عن أي نص في القوارئ العشر: يبحث في النصوص ويقرأ الفقرات بأرقامها، ويطّلع على تظليلك وملاحظاتك وإشاراتك وموضع توقفك في كل قارئ.'}));
+  else list.appendChild(el('div',{class:'chat-empty',text:'اسأل عن أي نص في القراء العشرة: يبحث في النصوص ويقرأ الفقرات بأرقامها، ويطّلع على تظليلك وملاحظاتك وإشاراتك وموضع توقفك في كل قارئ.'}));
   scroll();
 }
 
@@ -996,7 +997,7 @@ function openChatSettings(first){
   const openBox=el('div',{},[
     el('p',{text:'تعمل عبر دالة Supabase نفسها التي يستعملها Grok، فيبقى مفتاح OpenRouter سراً (السر OPENROUTER_API_KEY) وتُدخل هنا عنوان الدالة وكلمة المرور نفسيهما أدناه. افتراضياً لا يُسمح إلا بالنماذج المجانية (الوسم :free أو openrouter/free).'}),
     el('p',{text:'القيمة openrouter/free تختار تلقائياً نموذجاً مجانياً متاحاً. المجانية محدودة بطلبات في الدقيقة واليوم، وقد تتغير قائمتها؛ راجع openrouter.ai/models ثم اكتب المعرّف هنا. DeepSeek وKimi وQwen مدفوعة حالياً (تظهر في قائمة المحادثة مع سعرها)؛ لاستعمالهما اشحن رصيداً في OpenRouter واضبط السر OPENROUTER_PAID_PREFIXES=deepseek/,moonshotai/,qwen/ في الدالة.'}),
-    el('p',{text:'ليست كل النماذج المجانية تدعم أدوات البحث في نصوص القوارئ؛ إن لم يدعمها النموذج فسيجيب بلا بحث في النصوص. وتُخفى كتل التفكير <think> تلقائياً.'}),
+    el('p',{text:'ليست كل النماذج المجانية تدعم أدوات البحث في نصوص القراء؛ إن لم يدعمها النموذج فسيجيب بلا بحث في النصوص. وتُخفى كتل التفكير <think> تلقائياً.'}),
     el('label',{text:'اسم النموذج (اختياري)'}),omodel,
     el('datalist',{id:'openModels'},OPEN_SUGGEST.map(v=>el('option',{value:v})))
   ]);
@@ -1025,7 +1026,7 @@ function openChatSettings(first){
   // --- Gemini ---
   const gemModel=el('input',{type:'text',class:'chat-field',dir:'ltr',autocomplete:'off',spellcheck:'false',list:'gemModels',placeholder:GEM_DEFAULT,value:(store.get(K_GEMMODEL)&&store.get(K_GEMMODEL)!==GEM_OLD)?store.get(K_GEMMODEL):GEM_DEFAULT});
   const gemBox=el('div',{},[
-    el('p',{text:'مفتاح Gemini (من aistudio.google.com ← Get API key، بلا بطاقة) يبقى سراً داخل دالة Supabase باسم GEMINI_API_KEY، ولا يظهر هنا ولا في GitHub. أدخل عنوان الدالة وكلمة المرور نفسيهما أدناه — وهما نفسهما اللذان يستعملهما شريط شرح/بحث/بحث عميق في القوارئ.'}),
+    el('p',{text:'مفتاح Gemini (من aistudio.google.com ← Get API key، بلا بطاقة) يبقى سراً داخل دالة Supabase باسم GEMINI_API_KEY، ولا يظهر هنا ولا في GitHub. أدخل عنوان الدالة وكلمة المرور نفسيهما أدناه — وهما نفسهما اللذان يستعملهما شريط شرح/بحث/بحث عميق في القراء.'}),
     el('p',{text:'تنبيه خصوصية: في الطبقة المجانية قد تستخدم Google ما ترسله (ومنه نصوص تظليلك وملاحظاتك التي تطلبها الأدوات) لتحسين منتجاتها. الطبقة المدفوعة لا تفعل ذلك. والحصة المجانية محدودة وتتغير شروطها.'}),
     el('label',{text:'اسم النموذج'}),gemModel,
     el('datalist',{id:'gemModels'},['gemini-3.8-flash'].map(v=>el('option',{value:v})))
@@ -1089,9 +1090,9 @@ function openChatSettings(first){
 function openExport(){
   const RB=window.ReaderBridge;
   if(!RB||!RB.exportText){openModal('نسخ إلى Manus',el('p',{text:'وحدة الربط لم تُحمَّل — أعد تحميل الصفحة.'}));return}
-  const rsel=el('select',{class:'chat-field',id:'expReader'},[el('option',{value:'all',text:'كل القوارئ'})].concat(READERS.filter(r=>r.texts).map(r=>el('option',{value:r.id,text:r.title}))));
+  const rsel=el('select',{class:'chat-field',id:'expReader'},[el('option',{value:'all',text:'كل القراء'})].concat(READERS.filter(r=>r.texts).map(r=>el('option',{value:r.id,text:r.title}))));
   const chk=(label,on)=>{const i=el('input',{type:'checkbox'});i.checked=!!on;return {i,row:el('label',{class:'exp-chk'},[i,document.createTextNode(label)])}};
-  const cH=chk('تظليلي (مع ملاحظة كل تظليل)',true),cN=chk('ملاحظاتي',true),cB=chk('إشاراتي العادية',false),cP=chk('مواضع توقفي (يحمّل ملفات القوارئ المعنية)',false);
+  const cH=chk('تظليلي (مع ملاحظة كل تظليل)',true),cN=chk('ملاحظاتي',true),cB=chk('إشاراتي العادية',false),cP=chk('مواضع توقفي (يحمّل ملفات القراء المعنية)',false);
   const filt=el('input',{type:'text',class:'chat-field',placeholder:'مثال: wife أو زوجة',autocomplete:'off'});
   const q=el('input',{type:'text',class:'chat-field',dir:'ltr',placeholder:'مثال: husband wife — بلغة النص (الإنجليزية غالباً)',autocomplete:'off'});
   const mode=el('select',{class:'chat-field'},[['all_words','كل الكلمات في الفقرة'],['any','أي كلمة'],['phrase','العبارة كما هي']].map(([v,t])=>el('option',{value:v,text:t})));
@@ -1126,7 +1127,7 @@ function openExport(){
   };
   shareBtn.onclick=async()=>{
     if(typeof navigator.share!=='function'){info.textContent='المشاركة من الجهاز غير متاحة في هذا المتصفح. استخدمي «نسخ النص» ثم افتحي Manus والصقيه.';return}
-    try{await navigator.share({title:'حزمة دراسة من القوارئ العشر',text:out.value});info.textContent='✓ عادت المشاركة من الجهاز. اختاري Manus إن ظهر ضمن التطبيقات.'}
+    try{await navigator.share({title:'حزمة دراسة من القراء العشرة',text:out.value});info.textContent='✓ عادت المشاركة من الجهاز. اختاري Manus إن ظهر ضمن التطبيقات.'}
     catch(e){info.textContent=e&&e.name==='AbortError'?'أُلغيت المشاركة؛ بقي النص جاهزاً للنسخ.':'تعذّرت المشاركة من الجهاز. استخدمي «نسخ النص» بدلاً منها.'}
   };
   openModal('نسخ إلى Manus',el('div',{class:'chat-form'},[
@@ -1154,7 +1155,7 @@ function openExport(){
 function openOrganized(){
   const RB=window.ReaderBridge;
   if(!RB||!RB.exportOrganized){openModal('تصدير مرتب',el('p',{text:'وحدة الربط لم تُحمَّل — أعد تحميل الصفحة.'}));return}
-  const rsel=el('select',{class:'chat-field'},[el('option',{value:'all',text:'كل القوارئ'})].concat(READERS.filter(r=>r.texts).map(r=>el('option',{value:r.id,text:r.title}))));
+  const rsel=el('select',{class:'chat-field'},[el('option',{value:'all',text:'كل القراء'})].concat(READERS.filter(r=>r.texts).map(r=>el('option',{value:r.id,text:r.title}))));
   const chk=(label,on)=>{const i=el('input',{type:'checkbox'});i.checked=!!on;return {i,row:el('label',{class:'exp-chk'},[i,document.createTextNode(label)])}};
   const cH=chk('تظليلي',true),cN=chk('ملاحظاتي',true),cB=chk('إشاراتي العادية',false);
   const gsel=el('select',{class:'chat-field'},[['book','حسب الكتاب (بترتيب الفقرات)'],['color','حسب لون التظليل'],['topic','حسب مواضيع أحدّدها بكلمات']].map(([v,t])=>el('option',{value:v,text:t})));
@@ -1197,7 +1198,7 @@ function openOrganized(){
   openModal('تصدير مرتب',el('div',{class:'chat-form'},[
     el('div',{class:'manus-brief'},[
       el('strong',{text:'ملف مرتب بتظليلك وملاحظاتك'}),
-      el('p',{text:'يُجمَّع كل ما حفظتَه في القوارئ على هذا الجهاز دون اقتطاع، ويُرتَّب بحسب الكتاب أو اللون أو مواضيع تحدّدها. نزّله ملف HTML للقراءة والطباعة، أو Markdown للصقه في مستنداتك.'})
+      el('p',{text:'يُجمَّع كل ما حفظتَه في القراء على هذا الجهاز دون اقتطاع، ويُرتَّب بحسب الكتاب أو اللون أو مواضيع تحدّدها. نزّله ملف HTML للقراءة والطباعة، أو Markdown للصقه في مستنداتك.'})
     ]),
     el('label',{text:'القارئ'}),rsel,
     el('label',{text:'ما الذي يُضمَّن؟'}),cH.row,cN.row,cB.row,
@@ -1208,14 +1209,14 @@ function openOrganized(){
   ]));
 }
 
-// ---------- القوارئ المخصّصة (رفع قارئ جديد تلقائياً) ----------
+// ---------- القراء المخصّصة (رفع قارئ جديد تلقائياً) ----------
 const CUSTOM_COLORS=['#8b4e3a','#2563eb','#16805b','#7c4dba','#c94b6b','#a76b25','#0e7490'];
 function applyCustom(entries){
   const RCu=window.ReaderCustom;if(!RCu)return;
   for(let i=READERS.length-1;i>=0;i--)if(READERS[i].custom)READERS.splice(i,1);
   (entries||[]).forEach(e=>{const r=RCu.toReader(e);READERS.push(r);if(typeof READER_KEYS!=='undefined')READER_KEYS[r.id]=r.key});
   if(window.ReaderCloud&&ReaderCloud.addKeys)ReaderCloud.addKeys((entries||[]).map(e=>e.meta&&e.meta.key));
-  // الدردشة والتصدير يقرآن القوارئ عبر الجسر: نمرّر له القائمة الجديدة، ونفرغ ما حمّله إن تغيّرت نسخة أي قارئ
+  // الدردشة والتصدير يقرآن القراء عبر الجسر: نمرّر له القائمة الجديدة، ونفرغ ما حمّله إن تغيّرت نسخة أي قارئ
   const sig=(entries||[]).map(e=>e.id+':'+e.ver).join(',');
   if(typeof customSig!=='undefined'&&sig!==customSig&&window.ReaderBridge&&ReaderBridge.clearCache)ReaderBridge.clearCache();
   customSig=sig;
@@ -1306,7 +1307,7 @@ function openAdd(){
       const e=await RCu.publish(fileText,{title,sub:subInp.value.trim(),desc:descInp.value.trim(),accent:colorInp.value},t=>say(t));
       fileText='';fileInfo=null;form.style.display='none';fileInp.value='';
       applyCustom(await RCu.list().catch(()=>RCu.cached()));
-      say('✓ أُضيف «'+title+'» إلى المكتبة وسيظهر على أجهزتك كلها. تُزامَن بياناته (تظليل وملاحظات ومواضع) تلقائياً كباقي القوارئ.');
+      say('✓ أُضيف «'+title+'» إلى المكتبة وسيظهر على أجهزتك كلها. تُزامَن بياناته (تظليل وملاحظات ومواضع) تلقائياً كباقي القراء.');
       fillMine();
     }catch(err){say('✕ '+((err&&err.message)||err),true)}
     finally{upBtn.disabled=false;fileInp.disabled=false}
@@ -1329,7 +1330,7 @@ function openAdd(){
   }
 
   body.append(
-    el('p',{text:'اختر ملف القارئ الذي عبّأته بالكتب (المحفوظ بزر «📚 حفظ»). يُرفع إلى السحابة تلقائياً ويظهر في المكتبة على كل أجهزتك، ويُزامَن كباقي القوارئ: لا حاجة لنسخ ملفات أو تعديل أي كود.'}),
+    el('p',{text:'اختر ملف القارئ الذي عبّأته بالكتب (المحفوظ بزر «📚 حفظ»). يُرفع إلى السحابة تلقائياً ويظهر في المكتبة على كل أجهزتك، ويُزامَن كباقي القراء: لا حاجة لنسخ ملفات أو تعديل أي كود.'}),
     fileInp,form,msg,mine,manual());
   fillMine();
   openModal('إضافة قارئ جديد',body);

@@ -429,12 +429,76 @@
       });
     });
   }
+  function openSaveToFile() {
+    const context = state.selected || lastSelection;
+    const api = window.ReaderResearchFiles;
+    if (!context || !safeText(context.text).trim()) {
+      showToast('حدّدي نصاً في القارئ أو اختاري ملاحظة/تظليلاً محفوظاً أولاً.');
+      return;
+    }
+    if (!api) {
+      showToast('تعذّر تحميل ملفات البحث. أعيدي تحميل صفحة القارئ.');
+      return;
+    }
+    const files = api.listFiles();
+    const overlay = document.createElement('div');
+    overlay.setAttribute('role', 'presentation');
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:100010;display:flex;align-items:center;justify-content:center;padding:14px;background:rgba(0,0,0,.58);direction:rtl;font:14px/1.6 system-ui,sans-serif';
+    const box = document.createElement('div');
+    box.setAttribute('role', 'dialog'); box.setAttribute('aria-modal', 'true'); box.setAttribute('aria-labelledby', 'reader-file-title');
+    box.style.cssText = 'width:min(94vw,480px);max-height:90vh;overflow:auto;padding:16px;border:1px solid var(--border,#bbb);border-radius:10px;background:var(--bg2,#fff);color:var(--text,#222);box-shadow:0 14px 40px rgba(0,0,0,.3)';
+    const title = document.createElement('h2'); title.id = 'reader-file-title'; title.textContent = 'حفظ المقتطف في ملف بحث'; title.style.cssText = 'font-size:17px;margin:0 0 8px';
+    const excerpt = document.createElement('blockquote'); excerpt.textContent = '«' + safeText(context.text).slice(0, 500) + (context.text.length > 500 ? '…' : '') + '»'; excerpt.style.cssText = 'margin:0 0 12px;padding:8px 10px;border-inline-start:3px solid var(--gold,#a7864a);background:rgba(127,127,127,.08);max-height:120px;overflow:auto';
+    const label = document.createElement('label'); label.textContent = 'اختاري ملفاً أو أنشئي ملفاً جديداً'; label.style.cssText = 'display:block;margin:9px 0 4px';
+    const select = document.createElement('select'); select.style.cssText = 'width:100%;padding:9px;border:1px solid var(--border,#bbb);border-radius:7px;background:var(--bg,#fff);color:inherit;font:inherit';
+    const newOption = document.createElement('option'); newOption.value = 'new'; newOption.textContent = '＋ إنشاء ملف جديد'; select.appendChild(newOption);
+    files.forEach(file => { const option = document.createElement('option'); option.value = file.id; option.textContent = file.title + ' (' + file.entries.length + ')'; select.appendChild(option); });
+    const name = document.createElement('input'); name.type = 'text'; name.maxLength = 120; name.placeholder = 'عنوان ملف البحث'; name.setAttribute('aria-label', 'عنوان ملف البحث الجديد'); name.style.cssText = 'width:100%;margin-top:7px;padding:9px;border:1px solid var(--border,#bbb);border-radius:7px;background:var(--bg,#fff);color:inherit;font:inherit';
+    const noteLabel = document.createElement('label'); noteLabel.textContent = 'ملاحظة على هذا المقتطف (اختياري)'; noteLabel.style.cssText = 'display:block;margin:10px 0 4px';
+    const note = document.createElement('textarea'); note.rows = 3; note.maxLength = 5000; note.placeholder = 'اكتبي فكرة أو تعليقاً…'; note.style.cssText = 'width:100%;box-sizing:border-box;padding:9px;border:1px solid var(--border,#bbb);border-radius:7px;background:var(--bg,#fff);color:inherit;font:inherit;resize:vertical';
+    if (context.note) note.value = context.note;
+    const actions = document.createElement('div'); actions.style.cssText = 'display:flex;gap:8px;margin-top:12px';
+    const save = document.createElement('button'); save.type = 'button'; save.textContent = 'حفظ المقتطف'; save.className = 'reader-research-secondary'; save.style.cssText = 'flex:1;padding:9px;border:1px solid var(--gold,#a7864a);border-radius:7px;background:rgba(127,127,127,.08);color:inherit;font:inherit;cursor:pointer';
+    const cancel = document.createElement('button'); cancel.type = 'button'; cancel.textContent = 'إلغاء'; cancel.className = 'reader-research-secondary'; cancel.style.cssText = 'padding:9px;border:1px solid var(--border,#bbb);border-radius:7px;background:transparent;color:inherit;font:inherit;cursor:pointer';
+    function close() { overlay.remove(); document.removeEventListener('keydown', onKey); }
+    function onKey(event) { if (event.key === 'Escape') close(); }
+    cancel.addEventListener('click', close);
+    overlay.addEventListener('click', event => { if (event.target === overlay) close(); });
+    document.addEventListener('keydown', onKey);
+    save.addEventListener('click', () => {
+      let fileId = select.value;
+      if (fileId === 'new') {
+        const created = api.createFile(name.value);
+        if (!created) { name.focus(); showToast('اكتبي عنواناً للملف أو تحققي من مساحة التخزين.'); return; }
+        fileId = created.id;
+      }
+      const readerTitle = document.title;
+      const ok = api.addEntry(fileId, {
+        text: context.text,
+        reader: readerTitle,
+        book: context.title || '',
+        author: context.author || '',
+        paragraph: paragraphOf(context),
+        url: location.href.split('#')[0],
+        note: note.value,
+        kind: context.kind || 'selection'
+      });
+      if (!ok) { showToast('تعذّر حفظ المقتطف في التخزين المحلي.'); return; }
+      close(); showToast('✓ أُضيف المقتطف إلى ملف البحث.');
+    });
+    actions.append(save, cancel);
+    box.append(title, excerpt, label, select, name, noteLabel, note, actions);
+    overlay.appendChild(box); document.body.appendChild(overlay);
+    select.addEventListener('change', () => { name.hidden = select.value !== 'new'; });
+    name.hidden = select.value !== 'new';
+    if (name.hidden) select.focus(); else name.focus();
+  }
   function renderPanel() {
     if (!panel) return;
     panel.innerHTML = '<div class="reader-research-head"><div><strong>🔬 منصات البحث العلمي</strong><div class="reader-research-sub">تُنسخ الحزمة دائماً. المنصات المكتوب عليها «بالاستعلام جاهزاً» تُفتح والنص في رابطها (فيصلها عند الفتح)، والباقي لا يصله شيء حتى تلصقه بنفسك. اضغط ☆ لتثبيت منصة في المفضلة. حدود الاستخدام المجاني قد تتغير؛ أدوات الخرائط تحتاج غالباً ورقة أو DOI، والدفاتر تتطلب إضافة النص كمصدر.</div></div><button type="button" class="reader-research-close" aria-label="إغلاق">×</button></div>' +
       '<div class="reader-research-context"></div>' +
       '<div class="reader-research-question-box"><label>سؤالك البحثي (اختياري)<textarea class="reader-research-question" rows="2" maxlength="' + MAX_QUESTION_CHARS + '" placeholder="اتركه فارغاً لاستخدام السؤال الافتراضي: فحص دقة الفكرة"></textarea></label><div class="reader-research-presets">' + PRESETS.map(p => '<button type="button" class="reader-research-chip" data-preset="' + escapeHtml(p.id) + '">' + escapeHtml(p.label) + '</button>').join('') + '</div></div>' +
-      '<div class="reader-research-actions"><button type="button" class="reader-research-secondary" data-action="use-selection">استخدام النص المحدد</button><button type="button" class="reader-research-secondary" data-action="show-annotations">اختيار ملاحظة أو تظليل محفوظ</button></div>' +
+      '<div class="reader-research-actions"><button type="button" class="reader-research-secondary" data-action="use-selection">استخدام النص المحدد</button><button type="button" class="reader-research-secondary" data-action="show-annotations">اختيار ملاحظة أو تظليل محفوظ</button><button type="button" class="reader-research-secondary" data-action="save-to-file">حفظ في ملف بحث</button><a class="reader-research-secondary" href="../research.html" style="display:inline-block;text-decoration:none">إدارة الملفات</a></div>' +
       '<label class="reader-research-filter-check reader-research-notes-opt"><input type="checkbox" class="reader-research-include-notes"> تضمين ملاحظاتي وتظليلاتي المرتبطة بالحزمة (مطفأ افتراضياً حفاظاً على خصوصية أفكارك)</label>' +
       '<div class="reader-research-picker" ' + (state.view === 'annotations' ? '' : 'hidden') + '><label>ابحث في الملاحظات والتظليلات<input type="search" class="reader-research-filter" placeholder="عنوان الكتاب أو نص الملاحظة…"></label><label class="reader-research-filter-check"><input type="checkbox" class="reader-research-current-only" checked> الكتاب المفتوح فقط</label><div class="reader-research-annotation-list"></div></div>' +
       '<div class="reader-research-platform-list" ' + (state.view === 'annotations' ? 'hidden' : '') + '>' + platformMarkup() + '</div>';
@@ -445,6 +509,7 @@
     panel.querySelector('[data-action="show-annotations"]').addEventListener('click', () => {
       state.view = 'annotations'; state.items = listAnnotations(); renderPanel();
     });
+    panel.querySelector('[data-action="save-to-file"]').addEventListener('click', openSaveToFile);
     const filter = panel.querySelector('.reader-research-filter');
     const onlyCurrent = panel.querySelector('.reader-research-current-only');
     if (filter) filter.addEventListener('input', renderAnnotationList);

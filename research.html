@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#8b4e3a">
+  <meta name="google" content="notranslate">
+  <title>ملفات البحث | القراء العشرة</title>
+  <style>
+    :root{--bg:#f7f1e7;--paper:#fffdf8;--ink:#463728;--muted:#7a6a58;--accent:#8b4e3a;--line:#ddc8a8;--soft:#fff4df;--shadow:0 12px 30px rgba(15,23,42,.09)}
+    *{box-sizing:border-box}
+    body{margin:0;padding:16px;background:var(--bg);color:var(--ink);font-family:Tahoma,Arial,sans-serif;line-height:1.7}
+    button,input,textarea{font:inherit}
+    button{cursor:pointer;border:0;border-radius:9px;background:var(--accent);color:white;padding:9px 13px;font-weight:700}
+    button.secondary{background:var(--soft);color:var(--accent);border:1px solid var(--line)}
+    button.danger{background:#9e3830}
+    button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible{outline:3px solid #d3a875;outline-offset:2px}
+    a{color:var(--accent)}
+    .app{max-width:1180px;margin:auto}
+    .head{display:flex;justify-content:space-between;align-items:center;gap:14px;margin-bottom:16px;padding:18px 20px;border:1px solid var(--line);border-radius:18px;background:linear-gradient(135deg,var(--paper),var(--soft));box-shadow:var(--shadow)}
+    h1{font-size:clamp(22px,4vw,30px);line-height:1.3;margin:0 0 4px}
+    .sub{margin:0;color:var(--muted);font-size:14px}
+    .head-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+    .layout{display:grid;grid-template-columns:minmax(230px,300px) minmax(0,1fr);gap:16px;align-items:start}
+    .panel{background:var(--paper);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow);padding:16px;min-width:0}
+    .panel h2{font-size:18px;margin:0 0 10px}
+    .create-row{display:flex;gap:7px;margin-bottom:12px}
+    input,textarea{width:100%;min-width:0;border:1px solid var(--line);border-radius:9px;background:white;color:var(--ink);padding:9px 10px}
+    .create-row input{flex:1}
+    .file-list{display:grid;gap:7px}
+    .file-choice{width:100%;text-align:right;background:#fff;color:var(--ink);border:1px solid var(--line);padding:10px;border-radius:10px}
+    .file-choice.active{border-color:var(--accent);background:var(--soft)}
+    .file-choice strong,.file-choice small{display:block}
+    .file-choice small{color:var(--muted);font-weight:400;font-size:12px}
+    .empty{padding:22px 12px;text-align:center;color:var(--muted);border:1px dashed var(--line);border-radius:11px}
+    .notice{font-size:12px;color:var(--muted);margin:12px 0 0}
+    .toolbar{display:flex;flex-wrap:wrap;gap:7px;align-items:center;margin-bottom:13px}
+    .rename{display:flex;gap:7px;flex:1 1 260px}
+    .rename input{flex:1;font-weight:700}
+    .entries{display:grid;gap:11px}
+    .entry{border:1px solid var(--line);border-radius:12px;padding:13px;background:#fffefa}
+    .entry blockquote{margin:0 0 10px;padding:8px 12px;border-inline-start:3px solid var(--accent);background:var(--soft);white-space:pre-wrap;overflow-wrap:anywhere}
+    .meta{font-size:12px;color:var(--muted);overflow-wrap:anywhere;margin:3px 0}
+    .entry label{display:block;font-size:13px;font-weight:700;margin-top:8px}
+    .entry textarea{margin-top:4px;min-height:70px;resize:vertical}
+    .entry-foot{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:8px}
+    .status{min-height:22px;margin:9px 2px 0;color:var(--accent);font-size:13px}
+    .hidden{display:none!important}
+    @media(max-width:740px){body{padding:9px}.head{align-items:flex-start;flex-direction:column;padding:15px}.layout{grid-template-columns:1fr}.head-actions{width:100%}.head-actions>*{flex:1}}
+    @media print{body{background:white;padding:0}.head,.sidebar,.toolbar,.entry-foot,.status,.notice,.entry textarea{display:none!important}.layout{display:block}.panel{box-shadow:none;border:0;padding:0}.entry{break-inside:avoid}.entry blockquote{background:white}.meta{color:#333}}
+  </style>
+</head>
+<body>
+  <main class="app">
+    <header class="head">
+      <div>
+        <h1>ملفات البحث</h1>
+        <p class="sub">اجمعي مقتطفات من قرّاء مختلفين، وأضيفي ملاحظاتك، ثم صدّريها مع بيانات المصدر.</p>
+      </div>
+      <div class="head-actions">
+        <a href="./index.html">العودة إلى المكتبة</a>
+        <button class="secondary" id="backup">تنزيل نسخة احتياطية</button>
+        <button class="secondary" id="importButton">استعادة نسخة</button>
+        <input class="hidden" id="importFile" type="file" accept="application/json,.json">
+      </div>
+    </header>
+
+    <div class="layout">
+      <aside class="panel sidebar">
+        <h2>ملف جديد</h2>
+        <form class="create-row" id="createForm">
+          <input id="newTitle" maxlength="120" placeholder="عنوان الملف، مثل: صورة هرقل في المصادر" aria-label="عنوان ملف البحث الجديد" required>
+          <button type="submit">إنشاء</button>
+        </form>
+        <h2>ملفاتي</h2>
+        <div class="file-list" id="fileList"></div>
+        <p class="notice">تُحفظ الملفات على هذا الجهاز والمتصفح فقط. استخدمي النسخة الاحتياطية لنقلها أو حفظها.</p>
+      </aside>
+
+      <section class="panel" aria-live="polite">
+        <div id="detail"></div>
+        <div class="status" id="status" role="status"></div>
+      </section>
+    </div>
+  </main>
+
+  <script src="./research-files.js?v=1"></script>
+  <script>
+    (function(){
+      'use strict';
+      const api = window.ReaderResearchFiles;
+      const list = document.getElementById('fileList');
+      const detail = document.getElementById('detail');
+      const status = document.getElementById('status');
+      let activeId = null;
+
+      function el(tag, attrs, children){
+        const node = document.createElement(tag);
+        Object.keys(attrs || {}).forEach(key => {
+          if(key === 'text') node.textContent = attrs[key];
+          else if(key === 'className') node.className = attrs[key];
+          else if(key.startsWith('on') && typeof attrs[key] === 'function') node.addEventListener(key.slice(2).toLowerCase(), attrs[key]);
+          else node.setAttribute(key, attrs[key]);
+        });
+        (children || []).forEach(child => node.appendChild(child));
+        return node;
+      }
+      function say(message){ status.textContent = message || ''; }
+      function download(name, content, type){
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(new Blob([content], {type}));
+        link.href = url; link.download = name; document.body.appendChild(link); link.click();
+        setTimeout(() => { URL.revokeObjectURL(url); link.remove(); }, 1000);
+      }
+      function render(){
+        const files = api.listFiles();
+        if(!files.some(file => file.id === activeId)) activeId = files.length ? files[0].id : null;
+        list.replaceChildren();
+        if(!files.length) list.appendChild(el('div', {className:'empty', text:'لا توجد ملفات بعد. أنشئي ملفًا، ثم أضيفي إليه مقتطفات من أي قارئ.'}));
+        files.forEach(file => {
+          const button = el('button', {type:'button', className:'file-choice' + (file.id === activeId ? ' active' : ''), onclick:() => { activeId = file.id; say(''); render(); }});
+          button.append(el('strong', {text:file.title}), el('small', {text:file.entries.length + ' مقتطفات'}));
+          list.appendChild(button);
+        });
+        detail.replaceChildren();
+        const file = activeId && api.getFile(activeId);
+        if(!file){ detail.appendChild(el('div', {className:'empty', text:'اختاري ملفًا من القائمة أو أنشئي ملفًا جديدًا للبدء.'})); return; }
+
+        const toolbar = el('div', {className:'toolbar'});
+        const rename = el('form', {className:'rename', onsubmit:event => { event.preventDefault(); if(api.renameFile(file.id, renameInput.value)){ say('تم تحديث عنوان الملف.'); render(); } else say('اكتبي عنوانًا صالحًا للملف.'); }});
+        const renameInput = el('input', {type:'text', maxlength:'120', value:file.title, 'aria-label':'عنوان ملف البحث'});
+        rename.append(renameInput, el('button', {type:'submit', text:'حفظ العنوان'}));
+        toolbar.append(rename,
+          el('button', {type:'button', className:'secondary', text:'تصدير Markdown', onclick:() => download('research-' + api.slug(file.title) + '.md', api.markdown(file.id), 'text/markdown;charset=utf-8')}),
+          el('button', {type:'button', className:'secondary', text:'طباعة / PDF', onclick:() => window.print()}),
+          el('button', {type:'button', className:'danger', text:'حذف الملف', onclick:() => { if(window.confirm('حذف هذا الملف وكل مقتطفاته من هذا المتصفح؟')){ api.deleteFile(file.id); activeId = null; say('حُذف الملف.'); render(); } }}));
+        detail.appendChild(toolbar);
+        detail.appendChild(el('p', {className:'meta', text:'آخر تحديث: ' + new Date(file.updatedAt || Date.now()).toLocaleString('ar')}));
+        const entries = el('div', {className:'entries'});
+        if(!file.entries.length) entries.appendChild(el('div', {className:'empty', text:'الملف فارغ. افتحي أحد القرّاء، حدّدي مقتطفًا، ثم اختاري «حفظ في ملف بحث» من لوحة البحث العلمي.'}));
+        file.entries.forEach((entry, index) => {
+          const card = el('article', {className:'entry'});
+          card.appendChild(el('div', {className:'meta', text:'مقتطف ' + (index + 1)}));
+          card.appendChild(el('blockquote', {text:entry.text}));
+          const source = [entry.author, entry.book, entry.reader, entry.paragraph ? 'الفقرة ' + entry.paragraph : ''].filter(Boolean).join(' — ');
+          if(source) card.appendChild(el('div', {className:'meta', text:source}));
+          if(entry.url){ const sourceLink = el('a', {href:entry.url, target:'_blank', rel:'noopener noreferrer', text:'فتح صفحة المصدر'}); card.appendChild(sourceLink); }
+          const label = el('label', {text:'ملاحظتي'});
+          const note = el('textarea', {'aria-label':'ملاحظتي على المقتطف', placeholder:'اكتبي تعليقًا أو فكرة للمتابعة…'}); note.value = entry.note || '';
+          note.addEventListener('change', () => { if(api.updateEntry(file.id, entry.id, {note:note.value})) say('حُفظت الملاحظة.'); else say('تعذّر حفظ الملاحظة في التخزين المحلي.'); });
+          label.appendChild(note); card.appendChild(label);
+          const foot = el('div', {className:'entry-foot'});
+          foot.appendChild(el('span', {className:'meta', text:'أُضيف في ' + new Date(entry.createdAt || Date.now()).toLocaleDateString('ar')}));
+          foot.appendChild(el('button', {type:'button', className:'secondary', text:'إزالة المقتطف', onclick:() => { if(api.deleteEntry(file.id, entry.id)){ say('أُزيل المقتطف.'); render(); } }}));
+          card.appendChild(foot); entries.appendChild(card);
+        });
+        detail.appendChild(entries);
+      }
+
+      document.getElementById('createForm').addEventListener('submit', event => {
+        event.preventDefault();
+        const input = document.getElementById('newTitle');
+        const file = api.createFile(input.value);
+        if(!file){ say('تعذّر إنشاء الملف. تحققي من العنوان أو مساحة التخزين.'); return; }
+        activeId = file.id; input.value = ''; say('أُنشئ ملف البحث.'); render();
+      });
+      document.getElementById('backup').addEventListener('click', () => download('research-files-backup.json', api.exportBackup(), 'application/json;charset=utf-8'));
+      document.getElementById('importButton').addEventListener('click', () => document.getElementById('importFile').click());
+      document.getElementById('importFile').addEventListener('change', event => {
+        const file = event.target.files && event.target.files[0];
+        if(!file) return;
+        const reader = new FileReader();
+        reader.onload = () => {
+          if(!window.confirm('ستُستبدل ملفات البحث الحالية بالنسخة المختارة. هل تريدين المتابعة؟')) return;
+          if(api.importBackup(String(reader.result || ''), true)){ activeId = null; say('استُعيدت النسخة الاحتياطية.'); render(); }
+          else say('تعذّر استيراد الملف؛ تحققي من أنه نسخة صادرة من مساحة البحث.');
+          event.target.value = '';
+        };
+        reader.onerror = () => say('تعذّر قراءة الملف.');
+        reader.readAsText(file);
+      });
+      window.addEventListener('storage', event => { if(event.key === 'readerResearchFiles.v1') render(); });
+      render();
+    })();
+  </script>
+</body>
+</html>
