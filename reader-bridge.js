@@ -691,7 +691,7 @@ function buildSections(entries, groupBy, topicsText){
 }
 var KIND_LABEL = { highlight: 'تظليل', note: 'ملاحظة', bookmark: 'إشارة' };
 function mdEntry(e){
-  var head = '- **' + (e.pid != null && !isNaN(e.pid) ? 'فقرة ' + e.pid : 'بلا رقم فقرة') + '** · ' + (e.dot ? e.dot + ' ' : '') + KIND_LABEL[e.kind] + (e.date ? ' · ' + e.date : '');
+  var head = '- ' + (e.n ? '**[' + e.n + ']** ' : '') + '**' + (e.pid != null && !isNaN(e.pid) ? 'فقرة ' + e.pid : 'بلا رقم فقرة') + '** · ' + (e.dot ? e.dot + ' ' : '') + KIND_LABEL[e.kind] + (e.date ? ' · ' + e.date : '');
   var lines = [head];
   if(e.kind === 'note'){
     lines.push('  ' + oneLine(e.note));
@@ -704,7 +704,7 @@ function mdEntry(e){
 }
 function htmlEntry(e){
   var sw = e.kind === 'highlight' && e.color ? '<span class="sw" style="background:' + escHtml(e.color) + '"></span>' : '';
-  var h = '<li class="e ' + e.kind + '"><div class="m">' + sw + '<b>' + (e.pid != null && !isNaN(e.pid) ? 'فقرة ' + e.pid : 'بلا رقم فقرة') + '</b> · ' + KIND_LABEL[e.kind] +
+  var h = '<li class="e ' + e.kind + '"><div class="m">' + (e.n ? '<span class="no">' + e.n + '</span>' : '') + sw + '<b>' + (e.pid != null && !isNaN(e.pid) ? 'فقرة ' + e.pid : 'بلا رقم فقرة') + '</b> · ' + KIND_LABEL[e.kind] +
           (e.colorName ? ' ' + escHtml(e.colorName) : '') + (e.date ? ' · ' + escHtml(e.date) : '') + '</div>';
   if(e.kind === 'note'){
     h += '<div class="n">' + escHtml(oneLine(e.note)) + '</div>';
@@ -719,12 +719,39 @@ var ORG_CSS = 'body{font-family:"Noto Naskh Arabic","Amiri",Tahoma,sans-serif;li
   'h1{font-size:24px;margin:0 0 4px}h2{font-size:20px;margin:30px 0 6px;padding:6px 10px;background:#f1ece4;border-radius:8px}h3{font-size:17px;margin:20px 0 6px;color:#7c4a2d;border-bottom:1px solid #e5ddd0}' +
   '.meta{color:#78716c;font-size:14px;margin-bottom:14px}ul{list-style:none;padding:0;margin:0}li.e{padding:8px 4px;border-bottom:1px dashed #e5ddd0;break-inside:avoid}' +
   '.m{font-size:14px;color:#57534e}.sw{display:inline-block;width:14px;height:14px;border-radius:3px;margin-inline-end:6px;vertical-align:-2px;border:1px solid #0002}' +
-  '.q{margin-top:2px}.n{margin-top:2px;color:#7c4a2d}@media print{body{padding:0}h2{break-after:avoid}}';
+  '.no{display:inline-block;min-width:26px;padding:0 6px;margin-inline-end:6px;border-radius:9px;background:#7c4a2d;color:#fff;font-size:12px;text-align:center}.q{margin-top:2px}.n{margin-top:2px;color:#7c4a2d}@media print{body{padding:0}h2{break-after:avoid}}';
+
+// يرقّم العناصر 1..N بترتيب ظهورها في التقسيم المختار؛ الرقم يثبت على العنصر ولا يتغيّر بالتصفية اللاحقة
+function numberEntries(secs){
+  var n = 0;
+  secs.forEach(function(sec){ sec.groups.forEach(function(g){ g.entries.forEach(function(e){ if(!e.n) e.n = ++n; }); }); });
+  return n;
+}
+// قائمة مرقّمة مسطّحة (للواجهة): كل عنصر بنصه وملاحظته ورقمه
+function listNumbered(o){
+  o = o || {};
+  var groupBy = o.groupBy === 'color' || o.groupBy === 'topic' ? o.groupBy : 'book';
+  var entries = collectOrganized(o);
+  var secs = buildSections(entries, groupBy, o.topics);
+  numberEntries(secs);
+  var flat = [], seen = {};
+  secs.forEach(function(sec){ sec.groups.forEach(function(g){ g.entries.forEach(function(e){
+    if(seen[e.n]) return; seen[e.n] = 1; e.groupTitle = g.title; e.sectionTitle = sec.title; flat.push(e);
+  }); }); });
+  flat.sort(function(a, b){ return a.n - b.n; });
+  return { entries: flat, total: flat.length };
+}
 
 async function exportOrganized(o){
   o = o || {};
   var groupBy = o.groupBy === 'color' || o.groupBy === 'topic' ? o.groupBy : 'book';
   var entries = collectOrganized(o);
+  numberEntries(buildSections(entries, groupBy, o.topics));
+  var totalAll = entries.length;
+  if(Array.isArray(o.pick)){
+    var want = {}; o.pick.forEach(function(k){ want[Number(k)] = 1; });
+    entries = entries.filter(function(e){ return want[e.n]; });
+  }
   var counts = { highlights: 0, notes: 0, bookmarks: 0, total: entries.length };
   entries.forEach(function(e){ counts[e.kind === 'highlight' ? 'highlights' : e.kind === 'note' ? 'notes' : 'bookmarks']++; });
   var secs = buildSections(entries, groupBy, o.topics);
@@ -732,6 +759,7 @@ async function exportOrganized(o){
   var how = groupBy === 'color' ? 'حسب لون التظليل' : groupBy === 'topic' ? 'حسب المواضيع التي حدّدتها' : 'حسب الكتاب وترتيب الفقرات';
   var today = dayOf(Date.now());
   var meta = scope + ' · ' + counts.highlights + ' تظليل · ' + counts.notes + ' ملاحظة · ' + counts.bookmarks + ' إشارة · ترتيب: ' + how + ' · تاريخ التصدير ' + today +
+             (Array.isArray(o.pick) ? ' · المختار ' + entries.length + ' من ' + totalAll + ' (الأرقام كما في قائمة التصدير)' : '') +
              (o.filter ? ' · فلترة بكلمة «' + oneLine(o.filter) + '»' : '');
   var md = ['# تصدير مرتب من «القراء العشرة»', meta, '> رقم الفقرة (pid) كما يظهر في القارئ. النص المقتبس هو المقطع المحفوظ مع التظليل أو الإشارة (قد يكون مقتطعاً من الفقرة).'];
   var html = ['<h1>تصدير مرتب من «القراء العشرة»</h1><div class="meta">' + escHtml(meta) + '</div>'];
@@ -809,7 +837,7 @@ async function execTool(name, input){
 function clearCache(){ loadCache = {}; }
 
 root.ReaderBridge = {
-  configure: configure, tools: function(){ return TOOLS; }, execTool: execTool, clearCache: clearCache, exportText: exportText, exportOrganized: exportOrganized,
+  configure: configure, tools: function(){ return TOOLS; }, execTool: execTool, clearCache: clearCache, exportText: exportText, exportOrganized: exportOrganized, listNumbered: listNumbered,
   _t: { norm: norm, paras: paras, loadReader: loadReader, findReader: findReader, displayContentOf: displayContentOf,
         extractSections: extractSections, paragraphStartLines: paragraphStartLines, splitParagraphOffsets: splitParagraphOffsets,
         searchTexts: searchTexts, readPassage: readPassage, getUserData: getUserData, listLibrary: listLibrary }
