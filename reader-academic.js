@@ -80,7 +80,7 @@
   }
   loadPrefs();
   let lastSelection = null;
-  let root, trigger, panel, aiRoot, aiTrigger;
+  let root, trigger, panel, aiTrigger;
 
   function byId(id) { return document.getElementById(id); }
   function safeText(value) { return String(value == null ? '' : value); }
@@ -146,7 +146,7 @@
     document.addEventListener('mouseup', () => setTimeout(captureSelection, 0));
     document.addEventListener('touchend', () => setTimeout(captureSelection, 50), { passive: true });
     document.addEventListener('pointerdown', event => {
-      if (event.target && event.target.closest && event.target.closest('.reader-research-wrap, .reader-ai-models-wrap, .reader-research-popover')) {
+      if (event.target && event.target.closest && event.target.closest('.reader-research-wrap, .reader-research-popover')) {
         // On mobile, tapping the toolbar may collapse the browser selection. Snapshot it first.
         captureSelection();
         return;
@@ -573,9 +573,11 @@
     const style = document.createElement('style');
     style.textContent = `
       .reader-research-wrap{display:inline-flex;align-items:center}
+      .reader-ai-category{display:flex;flex:0 1 190px;flex-direction:column;align-items:stretch;gap:3px;min-width:150px;padding:4px;border:1px solid var(--border,#c9c2b4);border-radius:7px;background:rgba(127,127,127,.05)}
+      .reader-ai-category-label{display:block;text-align:center;font-size:10px;font-weight:700;color:var(--text2,#666)}
+      .reader-ai-category>.tbtn{width:100%;box-sizing:border-box;white-space:normal;line-height:1.35;padding:5px 6px;font-size:11px}
       .reader-research-trigger{border-color:var(--blue,var(--accent,#527995))!important;color:var(--blue,var(--accent,#527995))!important}
       .reader-research-trigger:hover{background:rgba(74,122,154,.14)!important}
-      .reader-ai-models-wrap{display:inline-flex;align-items:center}
       .reader-ai-models-trigger{border-color:var(--gold,#a7864a)!important;color:var(--gold,#8d6e32)!important}
       .reader-ai-models-trigger:hover{background:rgba(167,134,74,.14)!important}
       .reader-research-popover{position:fixed;z-index:100000;max-height:calc(100vh - 24px);overflow:auto;box-sizing:border-box;padding:12px;border:1px solid var(--border,#c9c2b4);border-radius:10px;background:var(--bg2,#fff);color:var(--text,#222);box-shadow:0 12px 36px rgba(0,0,0,.28);font:13px/1.5 system-ui,-apple-system,'Segoe UI',sans-serif;direction:rtl}
@@ -649,7 +651,9 @@
     const toolbar = byId('tb1') || byId('tb2');
     if (!toolbar || byId('reader-research-wrap')) return;
     installStyles();
-    root = document.createElement('span'); root.className = 'reader-research-wrap'; root.id = 'reader-research-wrap';
+    root = document.createElement('span'); root.className = 'reader-research-wrap reader-ai-category'; root.id = 'reader-research-wrap';
+    const categoryLabel = document.createElement('span'); categoryLabel.className = 'reader-ai-category-label'; categoryLabel.textContent = 'الذكاء الاصطناعي';
+    root.appendChild(categoryLabel);
     trigger = document.createElement('button'); trigger.type = 'button'; trigger.id = 'reader-research-trigger';
     trigger.className = 'tbtn reader-research-trigger'; trigger.textContent = '🔬 منصات البحث العلمي';
     trigger.setAttribute('aria-haspopup', 'dialog'); trigger.setAttribute('aria-expanded', 'false');
@@ -659,7 +663,6 @@
       togglePanel();
     });
     root.appendChild(trigger);
-    aiRoot = document.createElement('span'); aiRoot.className = 'reader-ai-models-wrap';
     aiTrigger = document.createElement('button'); aiTrigger.type = 'button';
     aiTrigger.className = 'tbtn reader-ai-models-trigger'; aiTrigger.textContent = '🤖 نماذج الذكاء الاصطناعي';
     aiTrigger.title = 'افتح نموذجاً خارجياً مع الفقرة المحددة والسؤال البحثي';
@@ -668,12 +671,10 @@
       event.stopPropagation();
       openAiModels();
     });
-    aiRoot.appendChild(aiTrigger);
+    root.appendChild(aiTrigger);
     const indexButton = Array.from(toolbar.querySelectorAll('button')).find(button => button.textContent.trim() === '☰');
-    if (indexButton && indexButton.parentElement === toolbar) {
-      toolbar.insertBefore(root, indexButton.nextSibling);
-      toolbar.insertBefore(aiRoot, root.nextSibling);
-    } else { toolbar.append(root, aiRoot); }
+    if (indexButton && indexButton.parentElement === toolbar) toolbar.insertBefore(root, indexButton.nextSibling);
+    else toolbar.appendChild(root);
     panel = document.createElement('div'); panel.id = 'reader-research-popover'; panel.className = 'reader-research-popover';
     panel.setAttribute('role', 'dialog'); panel.setAttribute('aria-label', 'منصات البحث العلمي'); panel.hidden = true;
     document.body.appendChild(panel);
