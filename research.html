@@ -55,6 +55,7 @@
     .pick-row input{width:20px;height:20px;flex:none;margin-top:2px}.pick-row.on{background:var(--soft)}
     .no{flex:none;min-width:32px;padding:1px 7px;border-radius:12px;background:var(--accent);color:#fff;font-weight:700;font-size:13px;text-align:center}
     .pick-grp{position:sticky;top:0;padding:4px 9px;background:var(--soft);color:var(--accent);font-weight:700;font-size:13px}
+    .cloudline{font-size:13px;color:var(--muted);margin:0 0 10px}
     .status{min-height:22px;margin:9px 2px 0;color:var(--accent);font-size:13px}
     .hidden{display:none!important}
     @media(max-width:740px){body{padding:9px}.head{align-items:flex-start;flex-direction:column;padding:15px}.layout{grid-template-columns:1fr}.head-actions{width:100%}.head-actions>*{flex:1}}
@@ -70,6 +71,7 @@
       </div>
       <div class="head-actions">
         <a href="./index.html">العودة إلى المكتبة</a>
+        <button class="secondary" id="syncBtn">☁ مزامنة الآن</button>
         <button class="secondary" id="backup">تنزيل نسخة احتياطية</button>
         <button class="secondary" id="importButton">استعادة نسخة</button>
         <input class="hidden" id="importFile" type="file" accept="application/json,.json">
@@ -89,13 +91,16 @@
       </aside>
 
       <section class="panel" aria-live="polite">
+        <div class="cloudline" id="cloudLine"></div>
         <div id="detail"></div>
         <div class="status" id="status" role="status"></div>
       </section>
     </div>
   </main>
 
-  <script src="./research-files.js?v=1"></script>
+  <script src="./cloud-config.js?v=1"></script>
+  <script src="./cloud-sync.js?v=4"></script>
+  <script src="./research-files.js?v=2"></script>
   <script src="./reader-numbers.js?v=1"></script>
   <script src="./reader-bridge.js?v=6"></script>
   <script src="./export-share.js?v=2"></script>
@@ -258,6 +263,24 @@
         reader.onerror = () => say('تعذّر قراءة الملف.');
         reader.readAsText(file);
       });
+      function cloudText(){
+        const s = api.syncStatus();
+        if(!s.configured) return '☁ المزامنة السحابية غير مفعّلة في الموقع؛ الملفات محفوظة على هذا الجهاز فقط.';
+        if(!s.hasCode) return '☁ لم يُفعَّل رمز المزامنة على هذا الجهاز: افتحي الصفحة الرئيسية ← لوحة التحكم ← المزامنة، ثم عودي — فتُحفظ الملفات في السحابة وتظهر على أجهزتك كلها.';
+        if(s.running) return '☁ جارٍ المزامنة…';
+        if(s.lastError) return '☁ تعذّرت المزامنة (' + s.lastError + ') — الملفات محفوظة على الجهاز وستُرسل تلقائياً لاحقاً.';
+        if(s.pending) return '☁ تغييرات بانتظار الإرسال…';
+        return s.lastOk ? '☁ محفوظ في السحابة · آخر مزامنة ' + new Date(s.lastOk).toLocaleTimeString('ar') : '☁ المزامنة مفعّلة.';
+      }
+      function showCloud(){ document.getElementById('cloudLine').textContent = cloudText(); }
+      api.onSyncStatus(showCloud);
+      document.getElementById('syncBtn').addEventListener('click', async () => {
+        if(!api.syncStatus().hasCode){ showCloud(); return; }
+        say('جارٍ المزامنة…'); await api.syncNow(); showCloud();
+        say(api.syncStatus().lastError ? '' : '✓ تمت المزامنة.');
+      });
+      window.addEventListener('researchfiles:changed', () => { render(); say('☁ وصلت تغييرات من جهاز آخر.'); });
+      showCloud();
       window.addEventListener('storage', event => { if(event.key === 'readerResearchFiles.v1') render(); });
       render();
     })();

@@ -348,6 +348,8 @@ window.ReaderCloud = {
   syncAll: syncAll, syncNow: function(){ return runSync('manual'); },
   /* قوارئ مخصّصة مرفوعة لاحقاً (reader-custom.js): تُضاف مفاتيحها لقائمة syncAll فتُزامَن مع بقية القراء */
   addKeys: function(arr){ (arr || []).forEach(function(k){ if(k && /^myreader_userdata_[a-z0-9_-]{1,80}$/.test(k) && ALL_KEYS.indexOf(k) < 0) ALL_KEYS.push(k); }); },
+  /* للوحدات الأخرى (ملفات البحث) كي تستعمل نفس الرمز ونفس الدالتين rs_get/rs_put */
+  _rpc: rpc, _hash: function(){ var c = getCode(); return c ? sha256hex('readers-sync:' + c) : Promise.reject(new Error('no-code')); },
   _merge: merge, _syncOne: syncOne, _keys: ALL_KEYS
 };
 })();
