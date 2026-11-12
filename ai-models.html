@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#8b4e3a">
+  <meta name="google" content="notranslate">
+  <title>نماذج الذكاء الاصطناعي | القراء العشرة</title>
+  <style>
+    :root{--bg:#f7f1e7;--paper:#fffdf8;--ink:#463728;--muted:#7a6a58;--accent:#8b4e3a;--line:#ddc8a8;--soft:#fff4df;--blue:#42677e;--shadow:0 14px 40px rgba(15,23,42,.10)}
+    *{box-sizing:border-box}
+    body{margin:0;min-height:100vh;padding:18px;background:var(--bg);color:var(--ink);font-family:system-ui,"Segoe UI",Tahoma,sans-serif}
+    .app{max-width:900px;margin:0 auto}
+    .card{background:var(--paper);border:1px solid var(--line);border-radius:20px;box-shadow:var(--shadow);overflow:hidden}
+    header{padding:22px 24px;background:linear-gradient(135deg,var(--paper),var(--soft));border-bottom:1px solid var(--line)}
+    .topline{display:flex;align-items:center;justify-content:space-between;gap:12px}
+    h1{font-size:clamp(21px,4vw,30px);margin:0;color:var(--accent)}
+    header p{margin:8px 0 0;color:var(--muted);line-height:1.7}
+    .home{color:var(--accent);text-decoration:none;font-weight:700;white-space:nowrap}
+    main{padding:22px}
+    .notice{padding:11px 13px;border:1px solid #c9d9e0;border-radius:12px;background:#f1f7f9;color:#294e61;font-size:13px;line-height:1.8;margin-bottom:18px}
+    .field{margin:0 0 16px}
+    label{display:block;font-weight:700;margin:0 0 6px}
+    .hint{display:block;color:var(--muted);font-weight:400;font-size:12px;line-height:1.6;margin-top:4px}
+    textarea,select{width:100%;border:1px solid var(--line);border-radius:11px;background:#fff;color:var(--ink);font:inherit;padding:12px;outline:0}
+    textarea:focus,select:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(139,78,58,.14)}
+    #passage{min-height:190px;resize:vertical;line-height:1.85}
+    #question{min-height:100px;resize:vertical;line-height:1.75}
+    .source{display:none;padding:9px 12px;margin:-5px 0 16px;border-right:3px solid var(--accent);background:rgba(139,78,58,.06);color:var(--muted);font-size:13px;line-height:1.7;overflow-wrap:anywhere}
+    .source.show{display:block}
+    .actions{display:flex;gap:9px;flex-wrap:wrap;margin-top:16px}
+    button{min-height:46px;padding:10px 16px;border:1px solid var(--accent);border-radius:11px;background:var(--accent);color:#fff;font:inherit;font-weight:700;cursor:pointer}
+    button:hover{filter:brightness(1.07)}
+    button.secondary{background:transparent;color:var(--accent)}
+    button:disabled{opacity:.5;cursor:not-allowed}
+    .status{min-height:24px;margin-top:12px;color:var(--blue);font-size:13px;line-height:1.7}
+    .privacy{margin:16px 0 0;padding-top:12px;border-top:1px solid var(--line);color:var(--muted);font-size:12px;line-height:1.8}
+    @media(max-width:600px){body{padding:8px}.card{border-radius:14px}header,main{padding:16px}.topline{align-items:flex-start}.actions button{flex:1 1 100%}}
+  </style>
+</head>
+<body>
+  <div class="app">
+    <section class="card" aria-labelledby="title">
+      <header>
+        <div class="topline"><h1 id="title">🤖 نماذج الذكاء الاصطناعي</h1><a class="home" href="./index.html">الرئيسية</a></div>
+        <p>جهّز مقتطف القارئ وسؤالك البحثي، ثم افتح النموذج الذي تختاره.</p>
+      </header>
+      <main>
+        <div class="notice">تُفتح نافذة النموذج بعد نسخ الحزمة البحثية. الروابط العامة لا تسمح لكل الخدمات بتمرير النص إلى خانة المحادثة مباشرة؛ في ChatGPT وClaude وPerplexity يُمرّر الاستعلام عبر الرابط، أما بقية الخدمات فتُفتح على موقعها ويكون النص جاهزاً للصقه.</div>
+        <div id="source" class="source" aria-live="polite"></div>
+        <div class="field">
+          <label for="passage">الفقرة المنسوخة أو المقتطف <span class="hint">يمكنك تعديلها أو لصق فقرة يدوياً. عند الفتح من قارئ، تُمرّر عبر تخزين محلي مؤقت يُحذف بعد تحميل الصفحة؛ لا يرفعها الموقع إلى خادمه.</span></label>
+          <textarea id="passage" maxlength="6000" placeholder="الصق الفقرة أو افتح هذه الصفحة من زر نماذج الذكاء الاصطناعي داخل القارئ…"></textarea>
+          <button id="pasteClipboard" class="secondary" type="button" style="margin-top:8px">لصق الفقرة من الحافظة</button>
+        </div>
+        <div class="field">
+          <label for="question">السؤال البحثي <span class="hint">اكتب السؤال الذي تريد من النموذج الإجابة عنه. إذا تركته فارغاً فسيُستخدم سؤال بحثي افتراضي.</span></label>
+          <textarea id="question" maxlength="800" placeholder="مثال: ما مدى دقة الفكرة في هذا المقتطف، وما الأدلة أو المصادر الأولية ذات الصلة؟"></textarea>
+        </div>
+        <div class="field">
+          <label for="model">اختر النموذج</label>
+          <select id="model">
+            <option value="" selected disabled>اختر نموذجاً…</option>
+            <option value="claude">Claude</option>
+            <option value="gemini">Gemini</option>
+            <option value="kimi">Kimi</option>
+            <option value="chatgpt">ChatGPT (GPT)</option>
+            <option value="manus">Manus</option>
+            <option value="grok">Grok</option>
+            <option value="deepseek">DeepSeek</option>
+            <option value="youmind">YouMind</option>
+            <option value="perplexity">Perplexity</option>
+            <option value="qwen">Qwen</option>
+            <option value="genspark">Genspark</option>
+            <option value="meta">Meta AI</option>
+          </select>
+        </div>
+        <div class="actions">
+          <button id="openModel" type="button" disabled>نسخ السؤال والفقرة وفتح النموذج</button>
+          <button id="copyPrompt" class="secondary" type="button" disabled>نسخ الحزمة فقط</button>
+        </div>
+        <div id="status" class="status" role="status" aria-live="polite"></div>
+        <p class="privacy">الفقرة والسؤال لا يغادران متصفحك حتى تضغط زر النسخ أو فتح النموذج. عند اختيار خدمة خارجية قد تنتقل بيانات الحزمة إليها عبر رابطها؛ راجع إعدادات الخصوصية وشروط الخدمة الخاصة بها.</p>
+      </main>
+    </section>
+  </div>
+  <script src="./ai-models.js?v=1"></script>
+</body>
+</html>
