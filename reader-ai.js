@@ -22,6 +22,9 @@
 
 var K_URL='readers_grok_url', K_PASS='readers_grok_pass', K_MODEL='readers_gemini_model';
 var K_PROV='readers_ai_provider';                 // 'gemini' (الأصل) | 'open' (ذكاء مجاني)
+var K_CKEY='readers_claude_key', K_CMODEL='readers_claude_model', K_GMODEL='readers_grok_model';   // نفس مفاتيح صفحة المحادثة الرئيسية (نفس المتصفح)
+var PROVS=['gemini','open','claude','grok'];
+var PNAME={gemini:'🤖 Gemini',open:'🆓 الذكاء المجاني',claude:'🟠 Claude',grok:'⚫ Grok'};
 var K_OMODEL='readers_open_model';                // نفس مفتاح صفحة المحادثة الرئيسية
 var OPEN_DEFAULT='openrouter/free';
 var OPEN_ALT=['google/gemma-4-31b-it:free','google/gemma-4-26b-a4b-it:free','nvidia/nemotron-3-ultra-550b-a55b:free'];
@@ -55,12 +58,12 @@ function cfg(){
            key:(window.READER_CLOUD_CONFIG||{}).key||'' };
 }
 
-function getProv(){ return lsGet(K_PROV)==='open'?'open':'gemini'; }
+function getProv(){ var v=lsGet(K_PROV); return PROVS.indexOf(v)>=0?v:'gemini'; }
 function syncProv(){
   var p=getProv();
   Array.prototype.forEach.call(document.querySelectorAll('select[data-rai-prov]'),function(x){ x.value=p; });
 }
-function setProv(v){ lsSet(K_PROV,v==='open'?'open':'gemini'); syncProv(); }
+function setProv(v){ lsSet(K_PROV,PROVS.indexOf(v)>=0?v:'gemini'); syncProv(); }
 function openModel(){
   var m=(lsGet(K_OMODEL)||'').trim();
   return /^[A-Za-z0-9._-]{1,40}\/[A-Za-z0-9._-]{1,80}(:[A-Za-z0-9._-]{1,20})?$/.test(m)?m:OPEN_DEFAULT;
@@ -68,8 +71,8 @@ function openModel(){
 // قائمة اختيار المحرك (تُستعمل في اللوحة العلوية وفي نافذة النتيجة، وتبقى متزامنة)
 function provSelect(cls){
   var x=mk('select',{class:cls,'data-rai':'1','data-rai-prov':'1','aria-label':'الذكاء المدمج',translate:'no',
-    title:'الذكاء المدمج — اختيار المحرك: Gemini (بحث ويب حيّ مع مصادر) أو ذكاء مجاني (نماذج مفتوحة عبر OpenRouter — تجيب من معرفتها بلا بحث ويب)'},
-    [mk('option',{value:'gemini',text:'🤖 Gemini'}),mk('option',{value:'open',text:'🆓 الذكاء المجاني'})]);
+    title:'الذكاء المدمج — اختيار المحرك: Gemini (بحث ويب حيّ مع مصادر) أو الذكاء المجاني (OpenRouter) أو Claude (بمفتاحك) أو Grok (عبر الدالة) — الثلاثة الأخيرة تجيب من معرفتها بلا بحث ويب'},
+    PROVS.map(function(k){ return mk('option',{value:k,text:PNAME[k]}); }));
   x.value=getProv();
   x.addEventListener('change',function(){ setProv(x.value); });
   return x;
@@ -444,7 +447,7 @@ function start(mode){
   }
   snap=s;
   var c=cfg();
-  if(!c.url||c.pass.length<16){ openSettings(function(){ start2(mode); }); return; }
+  if(getProv()!=='claude'&&(!c.url||c.pass.length<16)){ openSettings(function(){ start2(mode); }); return; }
   start2(mode);
 }
 // بعد ضبط الإعدادات لا نلتقط التحديد من جديد (قد ضاع) بل نستعمل اللقطة
@@ -458,9 +461,9 @@ function rerun(mode){
 function go(mode,s,q){
   if(run&&run.ac) run.ac.abort();
   var c=cfg();
-  if(!c.url||c.pass.length<16){ openSettings(function(){ go(mode,s,q); }); return; }
-  var openMode=getProv()==='open';
-  els.ttl.textContent=LABEL[mode]+' · '+(openMode?'🆓 مجاني':'🤖 Gemini')+(s.book?' — '+s.book:'');
+  if(getProv()!=='claude'&&(!c.url||c.pass.length<16)){ openSettings(function(){ go(mode,s,q); }); return; }
+  var prov=getProv(), openMode=prov==='open';
+  els.ttl.textContent=LABEL[mode]+' · '+PNAME[prov]+(s.book?' — '+s.book:'');
   els.quote.textContent=s.text; els.quote.style.display=s.text?'':'none';
   els.status.textContent=mode==='deep'?'جارٍ التحضير…':'جارٍ الاتصال…';
   els.plan.style.display='none'; els.plan.textContent='';
@@ -470,6 +473,7 @@ function go(mode,s,q){
 
   var ac=new AbortController(); var me={ac:ac,mode:mode}; run=me;
   if(openMode) return goOpen(me,mode,s,q,c);
+  if(prov==='claude'||prov==='grok') return goChat(me,mode,s,q,c,prov);
   var body={ provider:'gemini', mode:mode, text:s.text, q:q,
              ctx:{ book:s.book, author:s.author, pid:s.pid, before:s.before, after:s.after } };
   var m=(lsGet(K_MODEL)||'').trim(); if(/^gemini-/.test(m)) body.model=m;
@@ -670,6 +674,88 @@ function goOpen(me,mode,s,q,c){
       els.stop.style.display='none';
       if(acc&&!els.err.textContent) els.status.textContent='النموذج: '+(usedModel||openModel())+' — من معرفته دون بحث ويب';
       else if(!acc&&!els.err.textContent) els.status.textContent='لم يصل ردّ من النموذج — أعد المحاولة أو بدّل النموذج.';
+    }
+  });
+}
+
+
+/* ---------- Claude وGrok: جواب من معرفة النموذج (بلا بحث ويب) ---------- */
+function goChat(me,mode,s,q,c,kind){
+  var name=kind==='claude'?'Claude':'Grok';
+  els.status.textContent='النموذج '+name+' يجيب من معرفته — لا بحث ويب في هذا المحرك'+(mode==='explain'?'':' (للبحث الحيّ بمصادر اختر 🤖 Gemini)');
+  var sys=SYS_O[mode]||SYS_O.explain, subj=subjectText(s,q);
+  var acc='', raf=0, usedModel='';
+  var emit=function(d){ acc+=d; els.status.textContent=''; if(!raf) raf=requestAnimationFrame(paint); };
+  function paint(){ raf=0; renderMd(els.out,acc); }
+  var req;
+  if(kind==='claude'){
+    var key=(lsGet(K_CKEY)||'').trim();
+    if(!key){
+      els.err.textContent='⚠ لا يوجد مفتاح Claude على هذا الجهاز.\nافتح الصفحة الرئيسية (🏠) ← 💬 محادثة مع Claude ← ⚙ وأدخل مفتاح Anthropic مرة واحدة، ثم ارجع هنا.';
+      els.stop.style.display='none'; els.status.textContent=''; return;
+    }
+    usedModel=(lsGet(K_CMODEL)||'').trim()||'claude-sonnet-5-5';
+    req=fetch('https://api.anthropic.com/v1/messages',{method:'POST',signal:me.ac.signal,
+      headers:{'content-type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+      body:JSON.stringify({model:usedModel,max_tokens:4096,system:sys,messages:[{role:'user',content:subj}],stream:true})});
+  }else{
+    var headers={'content-type':'application/json','x-assistant-pass':c.pass}; if(c.key) headers.apikey=c.key;
+    var gm=(lsGet(K_GMODEL)||'').trim(); var body={provider:'xai',messages:[{role:'system',content:sys},{role:'user',content:subj}],max_tokens:4096};
+    if(/^grok-[A-Za-z0-9._-]{1,48}$/.test(gm)) body.model=gm;
+    req=fetch(c.url,{method:'POST',headers:headers,signal:me.ac.signal,body:JSON.stringify(body)});
+  }
+  req.then(function(res){
+    if(!res.ok){
+      return res.json().catch(function(){ return {}; }).then(function(j){
+        var m=''; try{ m=typeof j.error==='string'?j.error:((j.error&&j.error.message)||j.message||''); }catch(e){}
+        var base=kind==='claude'
+          ?(res.status===401?'مفتاح Claude غير صالح أو ملغى — حدّثه من الصفحة الرئيسية ← محادثة ← ⚙.'
+            :res.status===429?'تجاوزت حدّ الطلبات — أعد المحاولة بعد قليل.'
+            :res.status===402||res.status===400&&/credit|balance/i.test(m)?'رصيد حساب Anthropic لا يكفي.'
+            :res.status>=500?'خدمة Anthropic مشغولة — أعد المحاولة.':'رفض الخادم الطلب ('+res.status+').')
+          :(res.status===401?'كلمة مرور المساعد غير صحيحة — افتح ⚙ وصحّحها.'
+            :res.status===402||res.status===403&&/credit|spending/i.test(m)?'حساب xAI بلا رصيد — Grok مدفوع؛ اشحن الرصيد أو اختر محركاً آخر.'
+            :res.status===404?'الدالة غير منشورة بهذا الرابط — راجع ⚙.'
+            :res.status===429?'تجاوزت حدّ الطلبات — أعد المحاولة بعد قليل.'
+            :res.status>=500?'تعذّر الإتمام من الدالة أو xAI ('+res.status+').':'رفض الخادم الطلب ('+res.status+').');
+        throw new Error(base+(m?'\n'+m:''));
+      });
+    }
+    var rd=res.body.getReader(), dec=new TextDecoder(), buf='';
+    function feed(block){
+      block.split('\n').forEach(function(line){
+        if(line.indexOf('data:')!==0) return;
+        var d=line.slice(5).trim(); if(!d||d==='[DONE]') return;
+        var ev; try{ ev=JSON.parse(d); }catch(e){ return; }
+        if(ev.type==='error') throw new Error((ev.error&&ev.error.message)||'خطأ من الخادم أثناء البث.');
+        if(ev.error&&kind!=='claude') throw new Error(typeof ev.error==='string'?ev.error:(ev.error.message||'خطأ من الخادم أثناء البث.'));
+        if(kind==='claude'){
+          if(ev.type==='content_block_delta'&&ev.delta&&ev.delta.type==='text_delta') emit(ev.delta.text);
+        }else{
+          if(ev.model&&typeof ev.model==='string') usedModel=ev.model;
+          var ch=ev.choices&&ev.choices[0]; if(ch&&ch.delta&&ch.delta.content) emit(ch.delta.content);
+        }
+      });
+    }
+    function pump(){
+      return rd.read().then(function(r){
+        if(r.done){ if(buf.trim()) feed(buf); return; }
+        buf+=dec.decode(r.value,{stream:true}).replace(/\r\n/g,'\n');
+        var i; while((i=buf.indexOf('\n\n'))>=0){ var blk=buf.slice(0,i); buf=buf.slice(i+2); feed(blk); }
+        return pump();
+      });
+    }
+    return pump();
+  }).catch(function(e){
+    if(e&&e.name==='AbortError'){ els.status.textContent='أُوقف.'; return; }
+    els.err.textContent='⚠ '+(e&&e.message?e.message:'تعذّر الاتصال.')+
+      (/Failed to fetch|NetworkError|Load failed/i.test(String(e&&e.message))?'\nتحقق من الاتصال بالإنترنت'+(kind==='grok'?' ومن نشر الدالة.':'.'):'');
+  }).then(function(){
+    if(raf){ cancelAnimationFrame(raf); paint(); }
+    if(run===me){
+      els.stop.style.display='none';
+      if(acc&&!els.err.textContent) els.status.textContent='النموذج: '+(usedModel||name)+' — من معرفته دون بحث ويب';
+      else if(!acc&&!els.err.textContent) els.status.textContent='لم يصل ردّ من النموذج — أعد المحاولة أو بدّل المحرك.';
     }
   });
 }
