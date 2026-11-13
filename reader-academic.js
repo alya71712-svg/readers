@@ -9,7 +9,7 @@
     { group: 'البحث في الأدبيات والأدلة', items: [
       { id: 'consensus', mode: 'question', name: 'Consensus', url: 'https://consensus.app/search/', note: 'ألصقي الحزمة؛ يبدأ النص المحدد في أولها' },
       { id: 'elicit', mode: 'question', name: 'Elicit', url: 'https://elicit.com/', note: 'وكيل بحث ومراجعة أدبيات' },
-      { id: 'answerthis', mode: 'question', name: 'AnswerThis', url: 'https://answerthis.io/', note: 'بحث بالأطروحة أو DOI أو العنوان أو المؤلف؛ يمكن ربط الحساب عبر MCP' }
+      { id: 'answerthis', mode: 'question', name: 'AnswerThis', url: 'https://answerthis.io/', note: 'بحث بالأطروحة أو DOI أو العنوان أو المؤلف؛ يمكن ربط الحساب عبر MCP' },
       { id: 'scite', mode: 'question', name: 'Scite Assistant', url: 'https://scite.ai/assistant', note: 'بحث وسياق الاستشهادات الداعمة أو المعارضة' },
       { id: 'scispace', mode: 'question', name: 'SciSpace', url: 'https://scispace.com/search', note: '100 رصيد Agent شهرياً؛ محادثة PDF تتطلب إدخال الورقة' },
       { id: 'openread', mode: 'question', name: 'OpenRead', url: 'https://www.openread.academy/', note: '5 استخدامات شهرياً لبعض مزايا البحث وقراءة الأوراق' },
@@ -18,6 +18,13 @@
       { id: 'paperpal', mode: 'question', name: 'Paperpal', url: 'https://paperpal.com/', note: 'ميزات AI حتى 5 مرات يومياً؛ الحدود تختلف حسب الأداة' },
       { id: 'undermind', mode: 'question', name: 'Undermind', url: 'https://app.undermind.ai/', note: 'بحث عميق ينطلق من هدف أو سؤال' },
       { id: 'perplexity', mode: 'question', name: 'Perplexity', url: 'https://www.perplexity.ai/', deepLink: 'https://www.perplexity.ai/search?q=', note: 'بحث ويب وأكاديمي مع مصادر؛ يُفتح مع السؤال جاهزاً' }
+    ]},
+    { group: 'قواعد البيانات المتخصصة والمكتبات الأكاديمية', items: [
+      { id: 'ixtheo', mode: 'search', name: 'IxTheo', url: 'https://ixtheo.de/', note: 'فهرس متخصص في اللاهوت وتاريخ الأديان؛ الصق استعلامك في خانة البحث' },
+      { id: 'philpapers', mode: 'search', name: 'PhilPapers', url: 'https://philpapers.org/', note: 'فهرس متخصص في الفلسفة، بما فيها الفلسفة القديمة' },
+      { id: 'jstor', mode: 'search', name: 'JSTOR', url: 'https://www.jstor.org/', note: 'دوريات وكتب أكاديمية في التاريخ والعلوم الإنسانية؛ يتوفر محتوى مجاني' },
+      { id: 'project-muse', mode: 'search', name: 'Project MUSE', url: 'https://muse.jhu.edu/', note: 'كتب ودوريات جامعية في العلوم الإنسانية والدراسات الدينية' },
+      { id: 'inciteful', mode: 'seed', name: 'Inciteful', url: 'https://inciteful.xyz/', note: 'اكتشاف شبكات الأبحاث السابقة واللاحقة انطلاقاً من ورقة أو DOI' }
     ]},
     { group: 'اكتشاف الأوراق وشبكات المراجع', items: [
       { id: 'researchrabbit', mode: 'seed', name: 'ResearchRabbit', url: 'https://app.researchrabbit.ai/', note: 'تحتاج عادةً إلى ورقة أو DOI كبذرة' },
