@@ -384,9 +384,14 @@
     return ids;
   }
   function platformMarkup() {
-    const pinned = pinnedIds().map(platformById);
+    const databaseMode = state.view === 'databases';
+    const groups = PLATFORMS.filter(group => databaseMode
+      ? group.group === 'قواعد البيانات المتخصصة والمكتبات الأكاديمية'
+      : group.group !== 'قواعد البيانات المتخصصة والمكتبات الأكاديمية');
+    const allowed = new Set(groups.flatMap(group => group.items.map(item => item.id)));
+    const pinned = pinnedIds().filter(id => allowed.has(id)).map(platformById);
     const pinnedHtml = pinned.length ? '<section class="reader-research-group"><h3>⭐ المفضلة والأخيرة</h3><div class="reader-research-platforms">' + pinned.map(platformCard).join('') + '</div></section>' : '';
-    return pinnedHtml + PLATFORMS.map(group => '<section class="reader-research-group"><h3>' + escapeHtml(group.group) + '</h3><div class="reader-research-platforms">' + group.items.map(platformCard).join('') + '</div></section>').join('');
+    return pinnedHtml + groups.map(group => '<section class="reader-research-group"><h3>' + escapeHtml(group.group) + '</h3><div class="reader-research-platforms">' + group.items.map(platformCard).join('') + '</div></section>').join('');
   }
   // يربط أزرار النجمة وبطاقات المنصات؛ يُستدعى عند رسم اللوحة وعند تغيير المفضلة.
   function bindPlatformList() {
@@ -496,7 +501,12 @@
   }
   function renderPanel() {
     if (!panel) return;
-    panel.innerHTML = '<div class="reader-research-head"><div><strong>🔬 منصات البحث العلمي</strong><div class="reader-research-sub">تُنسخ الحزمة دائماً؛ مساعدات الذكاء الاصطناعي تتلقى توجيهاً للإجابة بالعربية، أما محركات وفهارس الأوراق فتعرض النتائج بلغاتها الأصلية. المنصات المكتوب عليها «بالاستعلام جاهزاً» تُفتح والسؤال فيها؛ والباقي الصقي فيه الحزمة المنسوخة. اضغط ☆ لتثبيت منصة في المفضلة. حدود الاستخدام المجاني قد تتغير؛ أدوات الخرائط تحتاج غالباً ورقة أو DOI، والدفاتر تتطلب إضافة النص كمصدر.</div></div><button type="button" class="reader-research-close" aria-label="إغلاق">×</button></div>' +
+    const databaseMode = state.view === 'databases';
+    const panelTitle = databaseMode ? '📚 قواعد البيانات العلمية' : '🔬 منصات البحث العلمي';
+    const panelDescription = databaseMode
+      ? 'فهارس ومكتبات أكاديمية متخصصة للبحث في الدراسات والكتب والدوريات والمصادر الأولية. اضغط ☆ لإضافة قاعدة إلى المفضلة.'
+      : 'تُنسخ الحزمة دائماً؛ مساعدات الذكاء الاصطناعي تتلقى توجيهاً للإجابة بالعربية، أما محركات وفهارس الأوراق فتعرض النتائج بلغاتها الأصلية. المنصات المكتوب عليها «بالاستعلام جاهزاً» تُفتح والسؤال فيها؛ والباقي الصقي فيه الحزمة المنسوخة. اضغط ☆ لتثبيت منصة في المفضلة. حدود الاستخدام المجاني قد تتغير؛ أدوات الخرائط تحتاج غالباً ورقة أو DOI، والدفاتر تتطلب إضافة النص كمصدر.';
+    panel.innerHTML = '<div class="reader-research-head"><div><strong>' + panelTitle + '</strong><div class="reader-research-sub">' + panelDescription + '</div></div><button type="button" class="reader-research-close" aria-label="إغلاق">×</button></div>' +
       '<div class="reader-research-context"></div>' +
       '<div class="reader-research-question-box"><label>سؤالك البحثي (اختياري)<textarea class="reader-research-question" rows="2" maxlength="' + MAX_QUESTION_CHARS + '" placeholder="اتركه فارغاً لاستخدام السؤال الافتراضي: فحص دقة الفكرة"></textarea></label><div class="reader-research-presets">' + PRESETS.map(p => '<button type="button" class="reader-research-chip" data-preset="' + escapeHtml(p.id) + '">' + escapeHtml(p.label) + '</button>').join('') + '</div></div>' +
       '<div class="reader-research-actions"><button type="button" class="reader-research-secondary" data-action="use-selection">استخدام النص المحدد</button><button type="button" class="reader-research-secondary" data-action="show-annotations">اختيار ملاحظة أو تظليل محفوظ</button><button type="button" class="reader-research-secondary" data-action="save-to-file">حفظ في ملف بحث</button><a class="reader-research-secondary" href="../research.html" style="display:inline-block;text-decoration:none">إدارة الملفات</a></div>' +
@@ -680,6 +690,17 @@
       openAiModels();
     });
     root.appendChild(aiTrigger);
+    const databaseTrigger = document.createElement('button'); databaseTrigger.type = 'button';
+    databaseTrigger.className = 'tbtn reader-database-trigger'; databaseTrigger.textContent = '📚 قواعد البيانات العلمية';
+    databaseTrigger.title = 'افتح قواعد البيانات والمكتبات الأكاديمية المتخصصة';
+    databaseTrigger.addEventListener('click', event => {
+      event.stopPropagation();
+      state.view = 'databases';
+      state.open = true; panel.hidden = false;
+      if (lastSelection) state.selected = lastSelection;
+      renderPanel(); positionPanel();
+    });
+    root.appendChild(databaseTrigger);
     const indexButton = Array.from(toolbar.querySelectorAll('button')).find(button => button.textContent.trim() === '☰');
     if (indexButton && indexButton.parentElement === toolbar) toolbar.insertBefore(root, indexButton.nextSibling);
     else toolbar.appendChild(root);
