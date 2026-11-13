@@ -72,6 +72,8 @@
     { id: 'translations', label: 'الترجمات والطبعات', q: 'ما الطبعات النقدية والترجمات المتاحة للمصدر المذكور، وهل تختلف في فهم هذا الموضع؟' }
   ];
   const MAX_QUESTION_CHARS = 600;
+  const RECENT_COPY_KEY = 'readerRecentCopy.v1';
+  const RECENT_COPY_TTL = 30 * 60 * 1000;
   const state = { open: false, view: 'platforms', selected: null, items: [], includeNotes: false, question: '', favorites: ['consensus'], last: null };
   // المفضلة وآخر منصة تُحفظ في المتصفح فقط (localStorage قد يكون غير متاح أو فارغاً، لذلك كل شيء داخل try/catch).
   function loadPrefs() {
@@ -113,6 +115,79 @@
     }
     return index >= 0 ? (data.books[index] || null) : null;
   }
+  function pickedContext() {
+    try {
+      const picked = window.ReaderPick && window.ReaderPick.items();
+      if (!Array.isArray(picked) || !picked.length) return null;
+      const data = readerData();
+      const titles = [];
+      const passages = picked.map((item, index) => {
+        const book = data.books.find(candidate => candidate.id === item.bookId) || {};
+        const title = item.bookTitle || book.title || 'مصدر غير محدد';
+        if (!titles.includes(title)) titles.push(title);
+        const reference = [title, item.pid != null ? 'الفقرة ' + item.pid : '', item.page ? 'ص ~' + item.page : '', item.sec || ''].filter(Boolean).join(' — ');
+        return '[' + (index + 1) + '] ' + reference + '\n' + safeText(item.text).trim();
+      }).filter(Boolean).join('\n\n');
+      if (!passages.trim()) return null;
+      const only = picked.length === 1 ? picked[0] : null;
+      const onlyBook = only && data.books.find(candidate => candidate.id === only.bookId);
+      return {
+        kind: 'selection', pickedCount: picked.length, text: passages.slice(0, MAX_PASSAGE_CHARS),
+        title: picked.length === 1 ? (only.bookTitle || (onlyBook && onlyBook.title) || '') : 'اختيارات متعددة: ' + titles.join('، '),
+        author: onlyBook && onlyBook.author || '', bookId: only && only.bookId || '',
+        pid: only ? only.pid : null
+      };
+    } catch (_) { return null; }
+  }
+  function recentCopiedContext() {
+    try {
+      const item = JSON.parse(localStorage.getItem(RECENT_COPY_KEY) || 'null');
+      if (!item || !item.text || !item.createdAt || Date.now() - Number(item.createdAt) > RECENT_COPY_TTL) {
+        localStorage.removeItem(RECENT_COPY_KEY);
+        return null;
+      }
+      return item;
+    } catch (_) { return null; }
+  }
+  function rememberCopiedText(text, metadata) {
+    const value = safeText(text).trim();
+    if (!value) return;
+    const picked = pickedContext();
+    const base = metadata || picked || state.selected || lastSelection || {};
+    const item = {
+      kind: 'selection', text: clipText(value, MAX_PASSAGE_CHARS),
+      title: safeText(base.title).trim(), author: safeText(base.author).trim(),
+      bookId: base.bookId || '', pid: base.pid == null ? null : base.pid, createdAt: Date.now()
+    };
+    try { localStorage.setItem(RECENT_COPY_KEY, JSON.stringify(item)); } catch (_) {}
+  }
+  function activeContext() {
+    if (state.selected && (state.selected.kind === 'note' || state.selected.kind === 'highlight') && safeText(state.selected.text).trim()) return state.selected;
+    const picked = pickedContext();
+    if (picked) return picked;
+    const recent = recentCopiedContext();
+    const selection = (lastSelection && safeText(lastSelection.text).trim()) ? lastSelection
+      : ((state.selected && state.selected.kind === 'selection' && safeText(state.selected.text).trim()) ? state.selected : null);
+    if (recent && (!selection || Number(recent.createdAt) >= Number(selection.capturedAt || 0))) return recent;
+    return selection || recent || (state.selected && safeText(state.selected.text).trim() ? state.selected : null);
+  }
+  function installCopyBridge() {
+    recentCopiedContext();
+    const api = window.ReaderCopyContext || {};
+    api.remember = rememberCopiedText;
+    api.latest = recentCopiedContext;
+    window.ReaderCopyContext = api;
+    window.addEventListener('reader:copy', event => {
+      const detail = event && event.detail || {};
+      rememberCopiedText(detail.text, detail.context);
+    });
+    document.addEventListener('copy', event => {
+      let text = '';
+      try { text = event.clipboardData && event.clipboardData.getData('text/plain') || ''; } catch (_) {}
+      if (!text) { try { text = window.getSelection().toString(); } catch (_) {} }
+      if (text) rememberCopiedText(text);
+    });
+  }
   function passageText() {
     try { return typeof selText !== 'undefined' ? safeText(selText).trim() : ''; } catch (_) { return ''; }
   }
@@ -145,7 +220,7 @@
       if (typeof getParagraphIdForNode === 'function') pid = getParagraphIdForNode(byId(pane === 2 ? 'bookText2' : 'bookText'), range.startContainer);
       else pid = paragraphId();
     } catch (_) { pid = paragraphId(); }
-    lastSelection = { kind: 'selection', text, bookId: book.id, title: book.title, author: book.author || '', pid };
+    lastSelection = { kind: 'selection', text, bookId: book.id, title: book.title, author: book.author || '', pid, capturedAt: Date.now() };
     state.selected = lastSelection;
     if (state.open) updateContextSummary();
   }
@@ -328,14 +403,14 @@
     else if (window.console) console.info(message);
   }
   function updateContextSummary() {
-    const context = state.selected;
+    const context = activeContext();
     const el = panel && panel.querySelector('.reader-research-context');
     if (!el) return;
     if (!context || !context.text) {
       el.innerHTML = '<strong>مصدر الحزمة:</strong> لا يوجد تحديد نصي نشط. يمكنك اختيار ملاحظة أو تظليل محفوظ أدناه.';
       return;
     }
-    const kind = context.kind === 'selection' ? 'نص محدد' : (context.kind === 'note' ? 'ملاحظة محفوظة' : 'تظليل محفوظ');
+    const kind = context.pickedCount ? 'الفقرات المحددة (' + context.pickedCount + ')' : (context.kind === 'selection' ? 'نص محدد أو منسوخ' : (context.kind === 'note' ? 'ملاحظة محفوظة' : 'تظليل محفوظ'));
     const title = context.title || 'مصدر غير محدد';
     const preview = safeText(context.text).replace(/\s+/g, ' ').trim();
     el.innerHTML = '<strong>المادة الحالية: ' + escapeHtml(kind) + '</strong><div class="reader-research-meta">' + escapeHtml(title) + ' · الفقرة ' + escapeHtml(paragraphOf(context)) + '</div><div class="reader-research-preview">«' + escapeHtml(preview.length > 180 ? preview.slice(0, 180) + '…' : preview) + '»</div>' + (context.note ? '<div class="reader-research-meta">ملاحظة: ' + escapeHtml(context.note.slice(0, 140)) + '</div>' : '');
@@ -409,7 +484,7 @@
         // نمنع فتح الرابط الافتراضي: النسخ يجب أن يتم أولاً وبشكل متزامن ضمن الضغطة نفسها،
         // وإلا فقد يفقد المستند التركيز عند فتح التبويب الجديد فيفشل النسخ (خاصة على الجوال).
         event.preventDefault();
-        const context = state.selected || lastSelection;
+        const context = activeContext();
         if (!context || !safeText(context.text).trim()) {
           showToast('حدّد نصاً أو اختر ملاحظة/تظليلاً محفوظاً أولاً.');
           return;
@@ -438,7 +513,7 @@
     });
   }
   function openSaveToFile() {
-    const context = state.selected || lastSelection;
+    const context = activeContext();
     const api = window.ReaderResearchFiles;
     if (!context || !safeText(context.text).trim()) {
       showToast('حدّدي نصاً في القارئ أو اختاري ملاحظة/تظليلاً محفوظاً أولاً.');
@@ -561,6 +636,7 @@
     let copied = false;
     try { copied = document.execCommand('copy'); } catch (_) {}
     area.remove();
+    rememberCopiedText(text);
     return copied;
   }
   function closePanel() {
@@ -583,7 +659,8 @@
   function openPanel() {
     if (!panel || !trigger) return;
     state.open = true; panel.hidden = false; state.view = 'platforms';
-    if (lastSelection) state.selected = lastSelection;
+    const context = activeContext();
+    if (context) state.selected = context;
     renderPanel();
     trigger.setAttribute('aria-expanded', 'true');
     positionPanel();
@@ -648,9 +725,9 @@
   }
   function openAiModels() {
     captureSelection();
-    const context = state.selected || lastSelection;
+    const context = activeContext();
     if (!context || !safeText(context.text).trim()) {
-      showToast('حدّد فقرة من نص القارئ أولاً، ثم افتح نماذج الذكاء الاصطناعي.');
+      showToast('حدّد فقرة أو اختر علامة صح بجوار نتيجة/فقرة، أو انسخ نصاً داخل الموقع أولاً.');
       return;
     }
     const token = (window.crypto && typeof window.crypto.randomUUID === 'function')
@@ -699,7 +776,8 @@
       event.stopPropagation();
       state.view = 'databases';
       state.open = true; panel.hidden = false;
-      if (lastSelection) state.selected = lastSelection;
+      const context = activeContext();
+      if (context) state.selected = context;
       renderPanel(); positionPanel();
     });
     root.appendChild(databaseTrigger);
@@ -720,6 +798,7 @@
     window.addEventListener('scroll', () => { if (state.open) positionPanel(); }, true);
   }
   function init() {
+    installCopyBridge();
     installUI();
     setSelectionCapture();
   }

@@ -40,6 +40,13 @@
     history.replaceState(null, '', location.pathname + location.search);
   }
   if (!payload || !payload.createdAt || Date.now() - Number(payload.createdAt) > 30 * 60 * 1000) payload = null;
+  if (!payload) {
+    try {
+      const recent = JSON.parse(localStorage.getItem('readerRecentCopy.v1') || 'null');
+      if (recent && recent.text && recent.createdAt && Date.now() - Number(recent.createdAt) <= 30 * 60 * 1000) payload = recent;
+      else localStorage.removeItem('readerRecentCopy.v1');
+    } catch (_) {}
+  }
   const book = payload && payload.title || '';
   const author = payload && payload.author || '';
   const paragraph = payload && payload.pid || '';
@@ -89,6 +96,12 @@
     let copied = false;
     try { copied = document.execCommand('copy'); } catch (_) {}
     area.remove();
+    try {
+      localStorage.setItem('readerRecentCopy.v1', JSON.stringify({
+        kind: 'selection', text: text.slice(0, MAX_PASSAGE), title: book, author: author,
+        pid: paragraph || null, createdAt: Date.now()
+      }));
+    } catch (_) {}
     if (!copied && navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard.writeText(text).then(() => {
         status.textContent = '✓ نُسخت الحزمة إلى الحافظة.';

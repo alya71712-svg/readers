@@ -250,14 +250,22 @@ function buildOverlay(){
   buildSettings();
 }
 function closeOv(){ if(run&&run.ac) run.ac.abort(); ov.classList.remove('show'); }
+function rememberSiteCopy(t){
+  try{
+    if(window.ReaderCopyContext&&typeof window.ReaderCopyContext.remember==='function') window.ReaderCopyContext.remember(t);
+    else window.dispatchEvent(new CustomEvent('reader:copy',{detail:{text:t,source:'reader-ai'}}));
+  }catch(e){}
+}
 function copyOut(){
   var t=(els.out.innerText||els.out.textContent||'').trim();
   if(els.src.style.display!=='none') t+='\n\nالمصادر:\n'+(els.src.innerText||'');
+  rememberSiteCopy(t);
   function done(m){ els.status.textContent=m; }
   try{ navigator.clipboard.writeText(t).then(function(){ done('✓ نُسخ'); },function(){ fallbackCopy(t); done('✓ نُسخ'); }); }
   catch(e){ fallbackCopy(t); done('✓ نُسخ'); }
 }
 function fallbackCopy(t){
+  rememberSiteCopy(t);
   var ta=mk('textarea'); ta.value=t; ta.style.cssText='position:fixed;opacity:0;top:0'; document.body.appendChild(ta);
   ta.select(); try{ document.execCommand('copy'); }catch(e){} ta.remove();
 }
@@ -349,6 +357,7 @@ function doShare(title,text){
   if(p&&p.catch) p.catch(function(e){ if(e&&e.name!=='AbortError') fallback(); });
 }
 function copyText(t){
+  rememberSiteCopy(t);
   try{ navigator.clipboard.writeText(t).catch(function(){ fallbackCopy(t); }); }catch(e){ fallbackCopy(t); }
 }
 // من نافذة النتيجة: يشارك النص + الجواب + المصادر

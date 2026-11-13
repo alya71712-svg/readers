@@ -155,6 +155,10 @@
       ok = document.execCommand('copy'); ta.remove();
     } catch (e) {}
     if (!ok && navigator.clipboard && navigator.clipboard.writeText) { try { navigator.clipboard.writeText(text); ok = true; } catch (e) {} }
+    try {
+      if (window.ReaderCopyContext && typeof window.ReaderCopyContext.remember === 'function') window.ReaderCopyContext.remember(text);
+      else window.dispatchEvent(new CustomEvent('reader:copy', { detail: { text: text, source: 'export-share' } }));
+    } catch (e) {}
     return ok;
   }
 

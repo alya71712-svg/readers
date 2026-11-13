@@ -250,6 +250,10 @@
       ok = document.execCommand('copy'); ta.remove();
     }catch(e){}
     if(!ok && navigator.clipboard && navigator.clipboard.writeText){ try{ navigator.clipboard.writeText(text); ok = true; }catch(e){} }
+    try{
+      if(window.ReaderCopyContext && typeof window.ReaderCopyContext.remember === 'function') window.ReaderCopyContext.remember(text);
+      else window.dispatchEvent(new CustomEvent('reader:copy', { detail: { text: text, source: 'reader-pick' } }));
+    }catch(e){}
     return ok;
   }
   function needItems(){ if(!items.length){ say('حدّد فقرة واحدة على الأقل أولاً'); return false; } return true; }
@@ -380,6 +384,8 @@
     var wrapped = function(text, msg, ta){
       var r = orig.apply(this, arguments);
       try{
+        if(window.ReaderCopyContext && typeof window.ReaderCopyContext.remember === 'function') window.ReaderCopyContext.remember(text);
+        else window.dispatchEvent(new CustomEvent('reader:copy', { detail: { text: String(text), source: 'reader-copy-button' } }));
         if(/Claude|ChatGPT|Gemini|Grok|Perplexity|Consensus|الصق/i.test(String(msg || '')) && typeof navigator.share === 'function')
           navigator.share({ title: '«القراء العشرة»', text: String(text) }).catch(function(){});
       }catch(e){}
