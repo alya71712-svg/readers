@@ -9,6 +9,7 @@
     { group: 'البحث في الأدبيات والأدلة', items: [
       { id: 'consensus', mode: 'question', name: 'Consensus', url: 'https://consensus.app/search/' },
       { id: 'elicit', mode: 'question', name: 'Elicit', url: 'https://elicit.com/' },
+      { id: 'answerthis', mode: 'question', name: 'AnswerThis', url: 'https://answerthis.io/', note: 'ابحث عن الأوراق بالموضوع أو DOI أو العنوان أو المؤلف؛ يمكن ربط حسابك عبر MCP' }
       { id: 'scite', mode: 'question', name: 'Scite', url: 'https://scite.ai/assistant' },
       { id: 'scispace', mode: 'question', name: 'SciSpace', url: 'https://scispace.com/search' },
       { id: 'undermind', mode: 'question', name: 'Undermind', url: 'https://app.undermind.ai/' },
