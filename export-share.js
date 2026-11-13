@@ -9,13 +9,20 @@
     { group: 'البحث في الأدبيات والأدلة', items: [
       { id: 'consensus', mode: 'question', name: 'Consensus', url: 'https://consensus.app/search/' },
       { id: 'elicit', mode: 'question', name: 'Elicit', url: 'https://elicit.com/' },
-      { id: 'answerthis', mode: 'question', name: 'AnswerThis', url: 'https://answerthis.io/', note: 'ابحث عن الأوراق بالموضوع أو DOI أو العنوان أو المؤلف؛ يمكن ربط حسابك عبر MCP' }
+      { id: 'answerthis', mode: 'question', name: 'AnswerThis', url: 'https://answerthis.io/', note: 'ابحث عن الأوراق بالموضوع أو DOI أو العنوان أو المؤلف؛ يمكن ربط حسابك عبر MCP' },
       { id: 'scite', mode: 'question', name: 'Scite', url: 'https://scite.ai/assistant' },
       { id: 'scispace', mode: 'question', name: 'SciSpace', url: 'https://scispace.com/search' },
       { id: 'undermind', mode: 'question', name: 'Undermind', url: 'https://app.undermind.ai/' },
       { id: 'perplexity', mode: 'question', name: 'Perplexity', url: 'https://www.perplexity.ai/', deepLink: 'https://www.perplexity.ai/search?q=' },
       { id: 'openread', mode: 'question', name: 'OpenRead', url: 'https://www.openread.academy/' },
       { id: 'paperguide', mode: 'question', name: 'Paperguide', url: 'https://paperguide.ai/' }
+    ]},
+    { group: 'قواعد البيانات المتخصصة والمكتبات الأكاديمية', items: [
+      { id: 'ixtheo', mode: 'search', name: 'IxTheo', url: 'https://ixtheo.de/', note: 'فهرس متخصص في اللاهوت وتاريخ الأديان؛ الصق استعلامك في خانة البحث' },
+      { id: 'philpapers', mode: 'search', name: 'PhilPapers', url: 'https://philpapers.org/', note: 'فهرس متخصص في الفلسفة، بما فيها الفلسفة القديمة' },
+      { id: 'jstor', mode: 'search', name: 'JSTOR', url: 'https://www.jstor.org/', note: 'دوريات وكتب أكاديمية في التاريخ والعلوم الإنسانية؛ يتوفر محتوى مجاني' },
+      { id: 'project-muse', mode: 'search', name: 'Project MUSE', url: 'https://muse.jhu.edu/', note: 'كتب ودوريات جامعية في العلوم الإنسانية والدراسات الدينية' },
+      { id: 'inciteful', mode: 'seed', name: 'Inciteful', url: 'https://inciteful.xyz/', note: 'اكتشاف شبكات الأبحاث السابقة واللاحقة انطلاقاً من ورقة أو DOI' }
     ]},
     { group: 'الذكاء الاصطناعي العام', items: [
       { id: 'claude', mode: 'question', name: 'Claude', url: 'https://claude.ai/', deepLink: 'https://claude.ai/new?q=' },
