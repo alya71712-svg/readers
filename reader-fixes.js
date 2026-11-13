@@ -77,10 +77,87 @@
     return { top: top, occ: occ };
   }
 
+
+  /* ---------- الأعلام العربية: قاموس أعلام وأماكن (متغيرات الكتابة تُفصل بـ |، الأول هو الاسم المعروض) ---------- */
+  var AR_GAZ = [
+    // أباطرة وقادة وشخصيات بيزنطية وفارسية
+    'هرقل|هرقليوس|هرقلس|هيراكليوس','كسرى|خسرو|خسرو برويز|برويز|كسرى أبرويز','فوقاس|فوكاس','قسطنطين|قسطنطينوس|قنسطنطين','يوستنيانوس|جستنيان|يوستينيانوس',
+    'موريس|موريق|مافريكيوس','مكسيموس|مكسيموس المعترف','سرجيوس|سرجيس|سرجيوس','صوفرونيوس|سفرونيوس','بيروس','المقوقس|كيروس',
+    'قنسطانس|قسطانس|قنستانز','ليو|ليون|لاون','نقفور|نيكيفوروس','شهربراز|شهربراز','شيروي|قباد','أنستاسيوس|اناستاسيوس',
+    // فلاسفة وكتّاب
+    'فيلون|فيلو|فيلون السكندري|فيلون الإسكندري','أوريجانوس|أوريجين|أوريجن|اوريجانوس','يوسيفوس|يوسيفوس فلافيوس|فلافيوس|يوسيفوس','أفلاطون|افلاطون','أرسطو|ارسطو|أرسطوطاليس','سقراط','فيثاغورس','زينون','أفلوطين|افلوطين','هوميروس','هيرودوت','أوغسطينوس|أغسطينوس|اوغسطين','باسيليوس|باسيل|باسيليوس القيصري','غريغوريوس|غريغوريوس النيصي|غريغوريوس النزينزي','أمبروسيوس|امبروسيوس','كيرلس|كيرلس السكندري','أثناسيوس|اثناسيوس','يوحنا فم الذهب|فم الذهب','ديونيسيوس|ديونيسيوس الأريوباغي','أبوللو|أبولو',
+    // أباطرة رومان وسياسة يهودية
+    'نيرون','فسباسيان|وسباسيان|فسبسيان','تيطس|طيطس|تيتوس','هيرودس','أغريبا|اغريبا|أجريبا','بيلاطس|بيلاطس البنطي|بيلاطوس','أوغسطس|أغسطس|اغسطس|أوكتافيان','طيباريوس|تيبيريوس|طيبريوس','كاليجولا|كاليغولا|غايوس','كلوديوس|قلوديوس','ديوقليتيانوس|دقلديانوس','يوليانوس|يوليان','قيصر|يوليوس قيصر','بومبي|بومبيوس','دوميتيان|دوميتيانوس','ترايان|تراجان|تراجانوس','هدريان|هادريان',
+    // أنبياء وشخصيات كتابية وقرآنية
+    'موسى','هارون','إبراهيم|ابراهيم|أبراهام','إسحاق|اسحق','يعقوب|إسرائيل','يوسف','داود','سليمان','آدم|ادم','حواء|حوه','نوح','إلياس|إيليا|ايليا','إشعياء|اشعياء|أشعيا','إرميا|ارميا','دانيال','حزقيال','أيوب|ايوب','يونس|يونان','عيسى|يسوع','المسيح|مسيح','مريم|مريام','يوحنا|يحيى','بولس|بولص','بطرس|بطرس','متى','مرقس','لوقا','محمد|أحمد','أبو بكر|أبوبكر','عمر بن الخطاب|عمر','عثمان','علي بن أبي طالب','خالد بن الوليد','ذو القرنين|ذي القرنين','جبريل|جبرائيل','ميكائيل|ميخائيل','إبليس|ابليس','لوط','صالح','هود','شعيب','إدريس|ادريس|أخنوخ|اخنوخ','قايين|قابيل','هابيل','شمشون','جالوت','طالوت','قورش|كورش','نبوخذنصر|بختنصر|نبوخذ نصر','قيافا',
+    // أمم وجماعات
+    'اليهود|يهود','الروم|روم','الرومان|رومان','الفرس|فرس','العرب|عرب','الأرمن|ارمن','الآفار|الأفار|الافار|آفار','الخزر|خزر','الأتراك|اتراك|الترك','اليونان|يونان|الإغريق|الاغريق|اغريق','الصقالبة|السلاف','البلغار|بلغار','الغساسنة|غسان','المناذرة|اللخميون','القبط|الأقباط|اقباط','الحبشة|الأحباش|احباش','النصارى|نصارى','المجوس|مجوس','الأريوسيين|الاريوسيين','الآشوريين|الاشوريين|آشور|أشور','البابليين|البابليون|بابل','الكلدانيين|الكلدان|كلدان','الفلسطينيين|الفلسطينيون|فلسطين','الفريسيين|الفريسيون','الصدوقيين|الصدوقيون','الغاليل|الجليليين|الجليل',
+    // أماكن
+    'القسطنطينية|قسطنطينية|القسطنطنية','الإسكندرية|اسكندرية|الاسكندرية','أورشليم|اورشليم|القدس|بيت المقدس|إيلياء|ايلياء','دمشق','أنطاكية|انطاكية','روما|رومية|رومة','مصر','الشام|سوريا|سورية','فارس|بلاد فارس','بيزنطة|بيزنطية|بيزنطه|بيزنطيون|البيزنطيين','الفرات','دجلة','النيل','الأردن|الاردن','قرطاج|قرطاجة','أفريقيا|افريقيا','قبرص','رودس','طيسفون|المدائن|قطيسفون','نينوى','نصيبين','الرها|أديسا|اديسا','سيناء|طور سيناء|سينا','مكة|بكة','يثرب|طيبة','اليمن','أثينا|اثينا','أنقرة|انقرة','طرسوس','قيصرية','صور|صيدا','بيت لحم','الناصرة','أريحا|اريحا','يافا','حمص','حلب','بعلبك','تدمر','الإسكندرون|الاسكندرون','أرمينية|ارمينية|ارمينيا','أذربيجان|اذربيجان','القوقاز','البحر الأسود|بحر البنطس|البنطس','البحر المتوسط','جبل الزيتون|جبل صهيون|صهيون|جبل الهيكل','الجلجثة|جلجثة|الجلجلة','الهيكل|هيكل سليمان','الفردوس|عدن'
+  ];
+  var AR_BOUND = '\\u0621-\\u064A';
+  var arCache = null; // [{name, src, re}]
+  function arNorm(s){
+    try{ if(typeof arNormalize === 'function') return arNormalize(s); }catch(e){}
+    return s.replace(/[ً-ْـ]/g, '').replace(/[أإآ]/g, 'ا').replace(/ى/g, 'ي').replace(/ة/g, 'ه');
+  }
+  function arPrepare(){
+    if(arCache) return arCache;
+    arCache = AR_GAZ.map(function(line){
+      var vs = line.split('|'), seen = Object.create(null), alts = [];
+      vs.forEach(function(v){
+        var n = arNorm(v.trim()); if(!n || seen[n]) return; seen[n] = 1;
+        // «الاسم» بالتعريف: أبقِ الصيغة بلا «ال» وأضِفها (السوابق ال/و/ف/ب/ل/ك تُعالَج في النمط)
+        alts.push(n.split(/\s+/).map(escRe).join('\\s+'));
+      });
+      alts.sort(function(a, b){ return b.length - a.length; });
+      // اللاحقة الاختيارية: ها/ه/هم/ان/ين/ون/ا (مثل هرقلَ، هرقلُ، اليهودُ)؛ تُترك الحدود الصارمة لتفادي التصاق كلمات أخرى
+      var core = '(?:' + alts.join('|') + ')';
+      var src = '(?<=(?:^|[^' + AR_BOUND + '])(?:[وفبلك]?(?:ال)?|لل)?)' + core.replace(/\(\?:ال\)\?/g, '') + '(?![' + AR_BOUND + '])';
+      return { name: vs[0].trim(), src: src, re: null };
+    });
+    return arCache;
+  }
+  function computeArabic(text){
+    var res = { top: [], occ: Object.create(null), src: Object.create(null) };
+    if(!/[؀-ۿ]/.test(text)) return res;
+    var n = (text.match(/[؀-ۿ]/g) || []).length;
+    if(n < 1000) return res;
+    var nm;
+    try{ nm = (typeof arNormalizeMap === 'function') ? arNormalizeMap(text) : null; }catch(e){ nm = null; }
+    if(!nm) return res;
+    var out = [];
+    arPrepare().forEach(function(g){
+      var re;
+      try{ re = new RegExp(g.src, 'g'); }catch(e){ return; }
+      var list = [], m;
+      while((m = re.exec(nm.norm)) !== null){
+        var s = nm.map[m.index], e = nm.map[m.index + m[0].length];
+        if(e == null || e <= s) e = s + m[0].length;
+        list.push([s, e]);
+        if(m[0].length === 0) re.lastIndex++;
+      }
+      if(list.length >= 2) out.push({ name: g.name, src: g.src, list: list });
+    });
+    out.sort(function(a, b){ return b.list.length - a.list.length; });
+    out.slice(0, AR_TOP_N).forEach(function(o){
+      res.top.push([o.name, o.list.length]); res.occ[o.name] = o.list; res.src[o.name] = o.src;
+    });
+    return res;
+  }
+  var AR_TOP_N = 10;
+
   function entityDataForBook(book){
     var key = (book.id || '') + '|' + (book.content || '').length;
     var r = cache.get(key);
-    if(!r){ r = computeEntities(book.content || ''); cache.set(key, r); }
+    if(!r){
+      r = computeEntities(book.content || '');
+      var ar = computeArabic(book.content || '');
+      r.ar = ar.top.map(function(p){ return p[0]; });
+      r.arSrc = ar.src;
+      ar.top.forEach(function(p){ r.top.push(p); r.occ[p[0]] = ar.occ[p[0]]; });
+      cache.set(key, r);
+    }
     return r;
   }
 
@@ -162,11 +239,11 @@
     return '(?<![' + LETTERS + '])' + name.split(/[ \t]+/).map(escRe).join('[ \\t]+') + '(?![' + LETTERS + '])';
   }
 
-  function goToOccurrence(book, name, o){
+  function goToOccurrence(book, name, o, arSrc){
     try{ if(typeof closePanel === 'function') closePanel('aip'); }catch(e){}
     var hit = { bookId: book.id, pos: o[0], len: o[1] - o[0] };
     try{
-      jumpToGlobalHit(hit, name, false, wordSrc(name));
+      jumpToGlobalHit(hit, name, false, arSrc || wordSrc(name));
     }catch(e){
       // احتياط: بيئة لا تدعم lookbehind أو خطأ في النمط ← بحث حرفي عادي بنفس الاسم
       try{ jumpToGlobalHit(hit, name); }catch(e2){}
@@ -174,7 +251,7 @@
   }
 
   /* ---------- قائمة مواضع علَم واحد ---------- */
-  function renderOccurrences(box, book, name, list){
+  function renderOccurrences(box, book, name, list, arSrc){
     box.innerHTML = '';
     box.className = 'ent-occ';
     var content = book.content || '';
@@ -226,13 +303,13 @@
           row.appendChild(meta);
 
           var cx = contextParts(content, o[0], o[1]);
-          var ctx = document.createElement('div'); ctx.className = 'ent-ctx'; ctx.setAttribute('dir', 'ltr');
+          var ctx = document.createElement('div'); ctx.className = 'ent-ctx'; ctx.setAttribute('dir', arSrc ? 'rtl' : 'ltr');
           ctx.appendChild(document.createTextNode(cx.pre));
           var mk = document.createElement('mark'); mk.textContent = cx.hit; ctx.appendChild(mk);
           ctx.appendChild(document.createTextNode(cx.post));
           row.appendChild(ctx);
 
-          var act = function(ev){ if(ev) ev.preventDefault(); goToOccurrence(book, name, o); };
+          var act = function(ev){ if(ev) ev.preventDefault(); goToOccurrence(book, name, o, arSrc); };
           row.onclick = act;
           row.onkeydown = function(ev){ if(ev.key === 'Enter' || ev.key === ' ') act(ev); };
           rowsBox.appendChild(row);
@@ -305,7 +382,7 @@
       '#aip #ent-occ .ent-no{background:var(--accent);color:#fff;border-radius:10px;padding:1px 9px;font-size:13px}',
       '#aip #ent-occ .ent-loc{color:var(--gold);font-weight:bold}',
       '#aip #ent-occ .ent-sec{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}',
-      '#aip #ent-occ .ent-ctx{font-size:15.5px;line-height:1.75;direction:ltr;text-align:left;unicode-bidi:plaintext;color:var(--text);font-family:Georgia,"Times New Roman",serif}',
+      '#aip #ent-occ .ent-ctx{font-size:15.5px;line-height:1.75;unicode-bidi:plaintext;color:var(--text);font-family:Georgia,"Times New Roman",serif}',
       '#aip #ent-occ .ent-ctx mark{background:rgba(220,160,60,.55);color:inherit;border-radius:3px;padding:0 2px}',
       '#aip #ent-occ .ent-more{display:block;width:100%;padding:13px;border:0;border-top:1px solid var(--border);background:var(--bg2);color:var(--blue);font-family:sans-serif;font-size:15px;cursor:pointer}'
     ].join('\n');
@@ -353,7 +430,7 @@
           if(t.classList.contains('on')){ closeOccurrences(); return; }
           closeOccurrences();
           t.classList.add('on'); t.setAttribute('aria-expanded', 'true');
-          renderOccurrences(occBox, book, p[0], ent.occ[p[0]] || []);
+          renderOccurrences(occBox, book, p[0], ent.occ[p[0]] || [], ent.arSrc && ent.arSrc[p[0]]);
           try{ occBox.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }catch(e){}
         };
         box.appendChild(t);
