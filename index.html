@@ -196,7 +196,7 @@ body.panel-hidden .panel-toggle{position:fixed;right:0;top:50%;transform:transla
 <script src="reader-numbers.js?v=1"></script>
 <script src="research-files.js?v=2"></script>
 <script src="reader-bridge.js?v=6"></script>
-<script src="export-share.js?v=4"></script>
+<script src="export-share.js?v=5"></script>
 <script>
 // ============================================================
 // قائمة القراء العشرة — عدّل هذه القائمة فقط لتغيير ما يظهر في الموقع.
@@ -1131,7 +1131,7 @@ function openExport(){
     finally{chatStatusHook=null;buildBtn.disabled=false}
   };
   copyBtn.onclick=async()=>{
-    try{await navigator.clipboard.writeText(out.value);info.textContent='✓ نُسخ النص. افتحي Manus والصقيه في محادثة جديدة.'}
+    try{await navigator.clipboard.writeText(out.value);info.textContent='✓ نُسخ النص. افتحي Manus والصقيه في محادثة جديدة.';try{if(typeof navigator.share==='function')navigator.share({title:'«القراء العشرة»',text:out.value}).catch(()=>{})}catch{}}
     catch{
       out.focus();out.select();try{out.setSelectionRange(0,out.value.length)}catch{}
       let done=false;try{done=document.execCommand('copy')}catch{}

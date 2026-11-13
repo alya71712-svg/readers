@@ -100,7 +100,9 @@
   }
 
   function copyOnly() {
-    const ok = copySync(promptText());
+    const shareTxt = promptText();
+    const ok = copySync(shareTxt);
+    try { if (typeof navigator.share === 'function') navigator.share({ title: 'مقتطفات من «القراء العشرة»', text: shareTxt }).catch(function () {}); } catch (_) {}
     status.textContent = ok ? '✓ نُسخت الحزمة البحثية كاملةً.' : 'جارٍ نسخ الحزمة؛ إذا لم تنجح تلقائياً فانسخ النص يدوياً.';
   }
 
@@ -109,6 +111,7 @@
     if (!item) return;
     const prompt = promptText();
     const copied = copySync(prompt);
+    try { if (typeof navigator.share === 'function') navigator.share({ title: 'مقتطفات من «القراء العشرة»', text: prompt }).catch(function () {}); } catch (_) {}
     let target = item.url;
     let prefilled = false;
     if (item.deepLink) {

@@ -189,6 +189,12 @@
           var isHdr = hdr.has(li);
           return { pid: isHdr ? null : Math.max(1, ub(starts, li)), sec: si >= 0 ? secs[si].title : '', hdr: isHdr };
         };
+        L.para = function(pid){ // نص الفقرة رقم pid (بلا أسطر العناوين)
+          var a = starts[pid - 1]; if(a == null) return '';
+          var b = starts[pid] != null ? starts[pid] : lines.length, out = [];
+          for(var k = a; k < b; k++){ if(hdr.has(k) && k !== a) break; if(!hdr.has(k)) out.push(lines[k]); }
+          return out.join('\n').trim();
+        };
         return L;
       }
       if(typeof getPageMap === 'function' && typeof splitParagraphOffsets === 'function'){
@@ -206,6 +212,10 @@
           var k = ub(ends, pos);
           var d = pos - (k ? cum[k - 1] : 0);
           return { pid: Math.max(1, ub(offs, d)), sec: '', hdr: false };
+        };
+        L.para = function(pid){
+          var a = offs[pid - 1]; if(a == null) return '';
+          return disp.slice(a, offs[pid] != null ? offs[pid] : disp.length).trim();
         };
         return L;
       }
@@ -464,6 +474,12 @@
     var txt = getCurrentPageEstimate() + ' / ' + total;
     if(el.textContent !== txt) el.textContent = txt;
   }
+
+  /* واجهة مشتركة لسكربت التحديد والمشاركة (reader-pick.js): إزاحة ← فقرة، ورقم فقرة ← نصها */
+  window.ReaderLocate = {
+    at: function(book, pos){ try{ return locatorFor(book).at(pos); }catch(e){ return { pid: null, sec: '', hdr: false }; } },
+    para: function(book, pid){ try{ var L = locatorFor(book); return L.para ? L.para(pid) : ''; }catch(e){ return ''; } }
+  };
 
   function install(){
     if(typeof renderAI === 'function') window.renderAI = renderAI2;

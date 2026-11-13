@@ -53,7 +53,7 @@
 
   ReaderCustom.getHtml(id, function(t){ msg.textContent = t; }).then(function(html){
     // اجعل القارئ المخصّص يستخدم أحدث التقاط للتحديد حتى لو كانت نسخته المحفوظة أقدم.
-    html = html.replace(/reader-academic\.js\?v=\d+/g, 'reader-academic.js?v=18');
+    html = html.replace(/reader-academic\.js\?v=\d+/g, 'reader-academic.js?v=21');
     var at = html.search(/<\/head>/i);
     if(at < 0) throw new Error('الملف المحفوظ في السحابة غير مكتمل.');
     // بعد الرفع يعرف القارئ أنه مخصّص (زر التحميل يجلب نسخته من السحابة). data-rc-inject تُزال عند أي إعادة رفع.

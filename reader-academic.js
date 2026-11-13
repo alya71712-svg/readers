@@ -418,6 +418,8 @@
         const prompt = buildPrompt(context, link.dataset.platformId);
         const copied = copySync(prompt);
         if (!copied && navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(prompt).catch(() => {});
+        // كل نسخ لمنصة بحث/ذكاء اصطناعي يصحبه فتح مشاركة تطبيقات الهاتف
+        try { if (typeof navigator.share === 'function') navigator.share({ title: 'مقتطفات من «القراء العشرة»', text: prompt }).catch(function () {}); } catch (_) {}
         let target = link.href;
         let prefilled = false;
         if (platform && platform.deepLink) {

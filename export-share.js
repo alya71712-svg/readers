@@ -302,7 +302,9 @@
     function needSel() { var it = selectedItems(); if (!it.length) { say('حدّد رقماً واحداً على الأقل أولاً.'); return null; } return it; }
     bCopy.onclick = function () {
       var it = needSel(); if (!it) return;
-      say(copySync(buildFull(it, q.value, MAX_PACK)) ? '✓ نُسخ السؤال مع ' + it.length + ' عنصراً — الصقه في أي تطبيق.' : 'تعذّر النسخ التلقائي في هذا المتصفح.');
+      var fullTxt = buildFull(it, q.value, MAX_PACK);
+      try { if (typeof navigator.share === 'function') navigator.share({ title: 'مقتطفات من «القراء العشرة»', text: fullTxt }).catch(function () {}); } catch (_) {}
+      say(copySync(fullTxt) ? '✓ نُسخ السؤال مع ' + it.length + ' عنصراً — الصقه في أي تطبيق.' : 'تعذّر النسخ التلقائي في هذا المتصفح.');
     };
     bShare.onclick = async function () {
       var it = needSel(); if (!it) return;
@@ -320,6 +322,7 @@
       var full = buildFull(it, q.value, pl.max || MAX_PACK);
       var copyText = pl.mode === 'search' ? buildShortQuery(it, q.value) : full;
       var copied = copySync(copyText), target = pl.url, pre = false;
+      try { if (typeof navigator.share === 'function') navigator.share({ title: 'مقتطفات من «القراء العشرة»', text: copyText }).catch(function () {}); } catch (_) {}
       if (pl.deepLink) {
         var d = buildDeep(it, q.value, pl);
         if (d) { target = d.url; pre = true; }
