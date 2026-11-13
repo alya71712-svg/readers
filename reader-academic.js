@@ -9,6 +9,7 @@
     { group: 'البحث في الأدبيات والأدلة', items: [
       { id: 'consensus', mode: 'question', name: 'Consensus', url: 'https://consensus.app/search/', note: 'ألصقي الحزمة؛ يبدأ النص المحدد في أولها' },
       { id: 'elicit', mode: 'question', name: 'Elicit', url: 'https://elicit.com/', note: 'وكيل بحث ومراجعة أدبيات' },
+      { id: 'answerthis', mode: 'question', name: 'AnswerThis', url: 'https://answerthis.io/', note: 'بحث بالأطروحة أو DOI أو العنوان أو المؤلف؛ يمكن ربط الحساب عبر MCP' }
       { id: 'scite', mode: 'question', name: 'Scite Assistant', url: 'https://scite.ai/assistant', note: 'بحث وسياق الاستشهادات الداعمة أو المعارضة' },
       { id: 'scispace', mode: 'question', name: 'SciSpace', url: 'https://scispace.com/search', note: '100 رصيد Agent شهرياً؛ محادثة PDF تتطلب إدخال الورقة' },
       { id: 'openread', mode: 'question', name: 'OpenRead', url: 'https://www.openread.academy/', note: '5 استخدامات شهرياً لبعض مزايا البحث وقراءة الأوراق' },
