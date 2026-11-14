@@ -1,6 +1,6 @@
 /* reader-pick.js v1 — تحديد الفقرات بمربّعات صغيرة ثم نسخها ومشاركتها (للقراء العشرة).
    • مربّع ☐ بجوار رقم كل فقرة في النص؛ الضغط يضع ✓ وتصير الفقرة «مختارة».
-   • مربّع مماثل بجوار كل نتيجة في كل أنواع البحث: العالمي، الموضوعي، المتقدم، بحث المقارنة الدلالي.
+   • مربّع مماثل بجوار كل نتيجة في كل أنواع البحث: العالمي، الموضوعي، المتقدم، المقارنة الدلالية والنصية.
      (النتيجة تُضاف بفقرتها الكاملة ورقمها واسم الكتاب، لا بالمقتطف القصير فقط.)
    • شريط عائم يعرض عدد المختار: «نسخ لـ Claude» ينسخ ويفتح مشاركة تطبيقات الهاتف معاً، و«مراجعة» تفتح قائمة المختار
      مع سؤالك البحثي ومنصات الذكاء الاصطناعي والبحث العلمي.
@@ -135,7 +135,7 @@
   }
 
   /* ---------- مربّعات نتائج البحث ---------- */
-  var RES_SEL = '#sp-res .sr, #theme-res .sr, #adv-results .adv-hit, #cmp-sem-results .cmp-hit';
+  var RES_SEL = '#sp-res .sr, #theme-res .sr, #adv-results .adv-hit, #cmp-sem-results .cmp-hit, #cmp-results .cmp-hit';
   function decorateResults(){
     var list = document.querySelectorAll(RES_SEL);
     for(var i = 0; i < list.length; i++){
@@ -169,6 +169,20 @@
       if(m2){
         book = library[+m2[1]] || null;
         if(book){ var probe = fb.replace(/\s+/g, ' ').slice(0, 50), i = (book.content || '').indexOf(fb.slice(0, 50)); if(i >= 0) pos = i; else if(probe) pos = null; }
+      } else if(r.closest && r.closest('#cmp-results')){
+        var aSel = $('cmp-book1'), bSel = $('cmp-book2');
+        var first = aSel && library[+aSel.value], second = bSel && library[+bSel.value];
+        var passages = Array.prototype.map.call(r.querySelectorAll('.cmp-hit-text'), function(node){ return node.textContent.trim(); }).filter(Boolean);
+        if(first && second && passages.length){
+          var resultIndex = Array.prototype.indexOf.call(r.parentNode.querySelectorAll('.cmp-hit'), r);
+          var combined = 'مقارنة نصية بين «' + (first.title || '') + '» و«' + (second.title || '') + '»\n\n' + passages.join('\n\n');
+          var compared = makeItem(first, null, null, combined);
+          if(compared){
+            compared.bookTitle = 'مقارنة: ' + (first.title || 'الكتاب الأول') + ' × ' + (second.title || 'الكتاب الثاني');
+            compared.key = first.id + '|cmp|' + second.id + '|' + resultIndex + '|' + compared.text.slice(-80);
+            return compared;
+          }
+        }
       }
     }
     if(!book) return null;
@@ -399,8 +413,25 @@
   var raf = 0;
   function schedule(){ if(raf) return; raf = requestAnimationFrame(function(){ raf = 0; decorateText(); decorateResults(); }); }
 
+  /* بعض أنواع البحث ترسم النتائج لاحقاً أو تعيد محتوى الحاوية الموجودة؛ نطلب
+     إعادة تزيين مباشرة بعد دوال الرسم، ولا نعتمد على MutationObserver وحده. */
+  function hookSearchRenderers(){
+    ['renderSP', 'doThemeSearch', 'runAdvancedSearch', 'runCompareSemantic', 'runBookCompare'].forEach(function(name){
+      var original = window[name];
+      if(typeof original !== 'function' || original.__pkDecorate) return;
+      var wrapped = function(){
+        var result = original.apply(this, arguments);
+        schedule();
+        setTimeout(schedule, 80); // يغطي النتائج غير المتزامنة التي تُرسم بعد الدالة
+        return result;
+      };
+      wrapped.__pkDecorate = true;
+      window[name] = wrapped;
+    });
+  }
+
   function install(){
-    injectCss(); restore(); buildBar(); updateBar(); patchCopy();
+    injectCss(); restore(); buildBar(); updateBar(); patchCopy(); hookSearchRenderers();
     // نقرة المربّعات: التقاط مبكر كي لا تُبدّل وضع ملء الشاشة ولا تنتقل النتيجة
     document.addEventListener('click', function(e){
       var b = e.target && e.target.closest ? e.target.closest('.pk-box') : null;
