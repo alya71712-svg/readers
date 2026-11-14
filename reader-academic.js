@@ -493,8 +493,7 @@
         const prompt = buildPrompt(context, link.dataset.platformId);
         const copied = copySync(prompt);
         if (!copied && navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(prompt).catch(() => {});
-        // كل نسخ لمنصة بحث/ذكاء اصطناعي يصحبه فتح مشاركة تطبيقات الهاتف
-        try { if (typeof navigator.share === 'function') navigator.share({ title: 'مقتطفات من «القراء العشرة»', text: prompt }).catch(function () {}); } catch (_) {}
+        // لا نستدعي navigator.share قبل window.open: المشاركة تستهلك إذن الضغطة فيحظر المتصفح النافذة المنبثقة.
         let target = link.href;
         let prefilled = false;
         if (platform && platform.deepLink) {
@@ -502,9 +501,12 @@
           const deep = platform.deepLink + encodeURIComponent(query);
           if (deep.length <= MAX_DEEPLINK_URL) { target = deep; prefilled = true; }
         }
-        window.open(target, '_blank', 'noopener');
+        let w = null;
+        try { w = window.open(target, '_blank'); } catch (_) {}
+        if (w) { try { w.opener = null; } catch (_) {} }
         state.last = link.dataset.platformId;
         savePrefs();
+        if (!w) { showToast('حظر المتصفح فتح ' + link.dataset.platform + ' تلقائياً؛ اسمح بالنوافذ المنبثقة لهذا الموقع. الحزمة منسوخة.'); return; }
         if (prefilled) showToast('✓ فُتحت ' + link.dataset.platform + ' بالاستعلام جاهزاً' + (platform.mode === 'question' ? ' (نسخة مختصرة)' : '') + '، والحزمة الكاملة منسوخة');
         else if (platform && platform.mode === 'seed') showToast('✓ نُسخ استعلام قصير؛ ابحث بعنوان ورقة أو DOI في ' + link.dataset.platform);
         else showToast(copied ? '✓ نُسخت الحزمة؛ الصقها في ' + link.dataset.platform : 'تعذّر النسخ تلقائياً؛ انسخ النص يدوياً.');

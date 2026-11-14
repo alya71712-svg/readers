@@ -326,12 +326,14 @@
       var full = buildFull(it, q.value, pl.max || MAX_PACK);
       var copyText = pl.mode === 'search' ? buildShortQuery(it, q.value) : full;
       var copied = copySync(copyText), target = pl.url, pre = false;
-      try { if (typeof navigator.share === 'function') navigator.share({ title: 'مقتطفات من «القراء العشرة»', text: copyText }).catch(function () {}); } catch (_) {}
       if (pl.deepLink) {
         var d = buildDeep(it, q.value, pl);
         if (d) { target = d.url; pre = true; }
       }
-      window.open(target, '_blank', 'noopener');
+      var w = null;
+      try { w = window.open(target, '_blank'); } catch (_) {}
+      if (w) { try { w.opener = null; } catch (_) {} }
+      if (!w) { say((copied ? 'نُسخت الحزمة. ' : '') + 'حظر المتصفح فتح ' + pl.name + ' تلقائياً؛ اسمح بالنوافذ المنبثقة لهذا الموقع ثم اضغط الزر مرة أخرى.'); return; }
       say(pre ? '✓ فُتحت ' + pl.name + ' والسؤال جاهز فيها (نسخة مختصرة)، والحزمة الكاملة منسوخة.'
         : pl.mode === 'search' ? (copied ? '✓ نُسخ استعلام قصير — الصقه في خانة البحث في ' + pl.name + '.' : 'تعذّر النسخ تلقائياً.')
         : (copied ? '✓ نُسخت الحزمة (السؤال + ' + it.length + ' عنصراً) — الصقها في ' + pl.name + '.' : 'تعذّر النسخ تلقائياً؛ استخدم «نسخ للصق».'));

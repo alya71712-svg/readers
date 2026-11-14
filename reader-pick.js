@@ -288,9 +288,11 @@
   function launch(p){
     if(!needItems()) return;
     var full = buildPrompt(), copied = copySync(full), target = p.url, pre = false;
-    try{ if(typeof navigator.share === 'function') navigator.share({ title: 'مقتطفات من «القراء العشرة»', text: full }).catch(function(){}); }catch(e){}
     if(p.deep){ var d = buildDeep(p); if(d){ target = d; pre = true; } }
-    window.open(target, '_blank', 'noopener');
+    var w = null;
+    try{ w = window.open(target, '_blank'); }catch(e){}
+    if(w){ try{ w.opener = null; }catch(e){} }
+    if(!w){ say((copied ? 'نُسخت الفقرات. ' : '') + 'حظر المتصفح فتح ' + p.name + ' تلقائياً؛ اسمح بالنوافذ المنبثقة لهذا الموقع ثم اضغط الزر مرة أخرى.'); return; }
     say(pre ? '✓ فُتحت ' + p.name + ' وسؤالك جاهز (نسخة مختصرة)، والكاملة منسوخة' : (copied ? '✓ نُسخت الفقرات — الصقها في ' + p.name : 'تعذّر النسخ تلقائياً'));
   }
 
