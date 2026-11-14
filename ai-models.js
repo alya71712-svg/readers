@@ -124,7 +124,6 @@
     if (!item) return;
     const prompt = promptText();
     const copied = copySync(prompt);
-    try { if (typeof navigator.share === 'function') navigator.share({ title: 'مقتطفات من «القراء العشرة»', text: prompt }).catch(function () {}); } catch (_) {}
     let target = item.url;
     let prefilled = false;
     if (item.deepLink) {
@@ -134,10 +133,25 @@
         prefilled = true;
       }
     }
-    window.open(target, '_blank', 'noopener');
-    status.textContent = prefilled
-      ? '✓ نُسخت الحزمة وطُلب فتح ' + item.name + ' مع السؤال والمقتطف في رابط المحادثة. إذا لم يظهر التبويب، اسمح بالنوافذ المنبثقة.'
-      : (copied ? '✓ نُسخت الحزمة وطُلب فتح ' + item.name + '. الصقها في مربع المحادثة، وإذا لم يظهر التبويب اسمح بالنوافذ المنبثقة.' : 'طُلب فتح ' + item.name + '. الصق الحزمة في مربع المحادثة، وإذا لم يظهر التبويب اسمح بالنوافذ المنبثقة.');
+    // نفتح النافذة أولاً وفي الضغطة نفسها: استدعاء navigator.share قبلها يستهلك إذن الضغطة فيحظر المتصفح النافذة المنبثقة.
+    // (لذلك لا نستدعي مشاركة الهاتف هنا؛ زر «نسخ فقط» يبقى معه فتح المشاركة.)
+    let w = null;
+    try { w = window.open(target, '_blank'); } catch (_) {}
+    if (w) { try { w.opener = null; } catch (_) {} }
+    status.textContent = '';
+    const msg = document.createElement('span');
+    if (w) {
+      msg.textContent = prefilled
+        ? '✓ نُسخت الحزمة وفُتح ' + item.name + ' مع السؤال والمقتطف في رابط المحادثة.'
+        : (copied ? '✓ نُسخت الحزمة وفُتح ' + item.name + '. الصقها في مربع المحادثة.' : 'فُتح ' + item.name + '. الصق الحزمة في مربع المحادثة.');
+      status.appendChild(msg);
+    } else {
+      // حُظرت النافذة رغم ذلك (إعداد المتصفح): نعرض رابطاً يُفتح بضغطة مباشرة
+      msg.textContent = (copied ? '✓ نُسخت الحزمة. ' : '') + 'حظر المتصفح الفتح التلقائي، اضغط هنا لفتح ' + item.name + ': ';
+      const a = document.createElement('a');
+      a.href = target; a.target = '_blank'; a.rel = 'noopener'; a.textContent = item.name + ' ↗';
+      status.appendChild(msg); status.appendChild(a);
+    }
   }
 
   pasteButton.addEventListener('click', function () {
