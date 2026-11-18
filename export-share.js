@@ -205,7 +205,7 @@
     var topicsBtn = el('button', { type: 'button', class: 'ghost', text: 'تطبيق المواضيع' });
     var topicsWrap = el('div', {}, [el('label', { text: 'المواضيع' }), topics, el('div', { class: 'xs-bar' }, [topicsBtn])]);
     topicsWrap.style.display = 'none';
-    var filt = el('input', { type: 'text', class: 'chat-field', placeholder: 'مثال: wife أو زوجة', autocomplete: 'off' });
+    var filt = el('input', { type: 'text', class: 'chat-field', placeholder: 'اختياري — مثال: wife أو زوجة', autocomplete: 'off' });
 
     var info = el('div', { class: 'exp-info', role: 'status', 'aria-live': 'polite' });
     var count = el('span', { class: 'xs-count', text: '' });

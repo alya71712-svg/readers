@@ -179,7 +179,6 @@ body.panel-hidden .panel-toggle{position:fixed;right:0;top:50%;transform:transla
           <button class="nav-btn" type="button" onclick="openCloud()" title="المزامنة السحابية"><span class="nav-icon">☁</span>المزامنة</button>
           <button class="nav-btn" type="button" onclick="openChat()" title="محادثة (نماذج مفتوحة أو Gemini أو Grok أو Claude)"><span class="nav-icon">💬</span>محادثة</button>
           <button class="nav-btn" type="button" onclick="openOrganized()" title="تصدير التظليل والملاحظات مرتباً بالكتاب أو اللون أو الموضوع"><span class="nav-icon">📑</span>تصدير مرتب</button>
-          <button class="nav-btn" type="button" onclick="openOrganized()" title="فتح منصات البحث العلمي والذكاء الاصطناعي"><span class="nav-icon">🔬</span>منصات البحث العلمي</button>
           <a class="nav-btn" href="./research.html" title="إنشاء ملفات بحث من مقتطفات القراء"><span class="nav-icon">📁</span>ملفات البحث</a>
         </div>
         <div class="panel-note">من داخل القارئ، استخدم قسم «الذكاء الاصطناعي» لفتح منصات البحث أو تمرير الفقرة إلى أحد النماذج.</div>
@@ -197,7 +196,7 @@ body.panel-hidden .panel-toggle{position:fixed;right:0;top:50%;transform:transla
 <script src="reader-numbers.js?v=1"></script>
 <script src="research-files.js?v=2"></script>
 <script src="reader-bridge.js?v=6"></script>
-<script src="export-share.js?v=8"></script>
+<script src="export-share.js?v=9"></script>
 <script>
 // ============================================================
 // قائمة القراء العشرة — عدّل هذه القائمة فقط لتغيير ما يظهر في الموقع.
@@ -1107,7 +1106,7 @@ function openExport(){
   const rsel=el('select',{class:'chat-field',id:'expReader'},[el('option',{value:'all',text:'كل القراء'})].concat(READERS.filter(r=>r.texts).map(r=>el('option',{value:r.id,text:r.title}))));
   const chk=(label,on)=>{const i=el('input',{type:'checkbox'});i.checked=!!on;return {i,row:el('label',{class:'exp-chk'},[i,document.createTextNode(label)])}};
   const cH=chk('تظليلي (مع ملاحظة كل تظليل)',true),cN=chk('ملاحظاتي',true),cB=chk('إشاراتي العادية',false),cP=chk('مواضع توقفي (يحمّل ملفات القراء المعنية)',false);
-  const filt=el('input',{type:'text',class:'chat-field',placeholder:'مثال: wife أو زوجة',autocomplete:'off'});
+  const filt=el('input',{type:'text',class:'chat-field',placeholder:'اختياري — مثال: wife أو زوجة',autocomplete:'off'});
   const q=el('input',{type:'text',class:'chat-field',dir:'ltr',placeholder:'مثال: husband wife — بلغة النص (الإنجليزية غالباً)',autocomplete:'off'});
   const mode=el('select',{class:'chat-field'},[['all_words','كل الكلمات في الفقرة'],['any','أي كلمة'],['phrase','العبارة كما هي']].map(([v,t])=>el('option',{value:v,text:t})));
   const lim=el('select',{class:'chat-field'},[5,10,20,30].map(n=>{const o=el('option',{value:String(n),text:n+' فقرات'});if(n===10)o.selected=true;return o}));
