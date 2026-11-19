@@ -11,7 +11,7 @@
 
   var SG_SALT = 'readers-gate-v1';
   var SG_ITER = 300000;
-  var SG_HASH = '97e66f24c3f4827c78ec6bf68bf6df2029aa8e63a545584df0d182c783b248ff';
+  var SG_HASH = 'f91f3ec2d101d3a86a1858f56ea6833f1e9baedcd3b410e199988c6285722c5c';
   var KEY = 'sg_ok_v1';
 
   var root = document.documentElement;
