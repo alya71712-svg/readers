@@ -47,7 +47,7 @@ function has(n,re){ return re.test(oc(n)); }
 /* يعيد: {g:'مجموعة', pair:'مفتاح زوج'?} أو null إن كان العنصر يبقى في الشريط العلوي */
 function classify(n){
   if(n.nodeType!==1) return null;
-  if(n.id==='rm-open'||n.id==='tb-title'||n.id==='tb-home') return null;   // يبقى في الشريط: ☰ و🏠 الرئيسية و🧰 الأدوات
+  if(n.id==='rm-open'||n.id==='tb-title'||n.id==='tb-home'||n.id==='tb-translate') return null;   // يبقى في الشريط: ☰ و🏠 الرئيسية و🧰 الأدوات
   if(n.tagName==='INPUT'||n.tagName==='SCRIPT'||n.tagName==='STYLE') return null;
   if(n.tagName==='BUTTON'&&txt(n)==='☰') return null;            // مفتاح قائمة الكتب الجانبية: يبقى
   if(has(n,/\b(openSP|toggleFind)\(/)) return {g:'search'};
