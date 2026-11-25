@@ -812,6 +812,11 @@ function installBar(){
   var first=null;
   for(var n=tb1.firstChild;n;n=n.nextSibling){ if(n.nodeType===1){ first=n; break; } }
   if(first&&first.nextSibling) tb1.insertBefore(home,first.nextSibling); else tb1.appendChild(home);
+  // زر ترجمة الصفحة كاملة إلى العربية عبر Google Translate
+  var tr=mk('button',{type:'button',class:'tbtn',id:'tb-translate','data-rai':'1',translate:'no',
+    title:'ترجمة صفحة القارئ إلى العربية',text:'🌐 ترجمة',
+    onclick:function(){ var u='https://translate.google.com/translate?sl=auto&tl=ar&u='+encodeURIComponent(location.href); window.open(u,'_blank','noopener'); }});
+  if(home.parentNode===tb1&&home.nextSibling) tb1.insertBefore(tr,home.nextSibling); else tb1.appendChild(tr);
 
   // ٣) أزرار الذكاء في نفس الحاوية (آخرها): اختيار المحرك ثم شرح/بحث/بحث عميق/إعدادات
   tb1.appendChild(provSelect('ai-sel'));
