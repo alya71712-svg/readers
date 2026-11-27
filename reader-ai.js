@@ -497,6 +497,7 @@ function prepareBookAndGo(mode,s,q){
   els.status.textContent='🌐 يترجم سؤال البحث تلقائياً إلى لغة الكتاب لتحسين العثور على الفقرات…';
   translateBookQuery(c,question,bookParagraphs().slice(0,3).map(function(p){return p.text;}).join(' ')).then(function(translated){
     if(translated) s.bookSearchTerms=translated;
+    s.bookTranslationFailed=!!question&&/[\\u0600-\\u06FF]/.test(question)&&!translated;
     go(mode,s,q);
   });
 }
@@ -516,9 +517,9 @@ function go(mode,s,q){
 
   if(mode==='book'){
     var pin=parseInt(s.pid,10)||0;
-    s=Object.assign({},s,{passages:retrieve((q||'')+' '+(s.bookSearchTerms||'')+' '+(s.text||''),pin)});
+    s=Object.assign({},s,{passages:retrieve((q||'')+' '+(s.bookSearchTerms||'')+' '+(s.text||''),pin),bookTranslationFailed:!!s.bookTranslationFailed});
     if(!s.passages.length){ els.stop.style.display='none'; els.status.textContent='';
-      els.err.textContent='⚠ لم أجد فقرات مناسبة. حاول صياغة السؤال بالعربية مرة أخرى؛ يقوم النظام بترجمة كلمات البحث تلقائياً إلى لغة الكتاب، وقد تكون بعض المصطلحات الخاصة غير مألوفة.'; return; }
+      els.err.textContent='⚠ لم أجد فقرات مناسبة. '+(s.bookTranslationFailed?'تعذّرت الترجمة التلقائية هذه المرة؛ تحقق من اتصال الإنترنت وإعدادات المساعد ثم أعد المحاولة. ':'')+'يمكنك إعادة صياغة السؤال بالعربية؛ النظام يحاول ترجمة كلمات البحث إلى لغة الكتاب.'; return; }
     showPassages(s.passages);
   }
   var ac=new AbortController(); var me={ac:ac,mode:mode}; run=me;
