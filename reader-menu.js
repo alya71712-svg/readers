@@ -61,7 +61,7 @@ function classify(n){
   if(n.hasAttribute('data-rai')){
     var t=txt(n);
     if(/^📤/.test(t)) return {g:'share'};
-    if(t==='⚙'||/^(💡|🔎|🔬)/.test(t)) return {g:'ai'};
+    if(t==='⚙'||/^(📖|💡|🔎|🔬)/.test(t)) return {g:'ai'};
   }
   if(n.id==='split-btn'||n.id==='close-compare-btn') return {g:'cmp'};
   if(has(n,/\b(exportCurrentBook|exportUserData)\(/)||n.classList.contains('tb-pair')||n.id==='save-reader-btn') return {g:'share'};
