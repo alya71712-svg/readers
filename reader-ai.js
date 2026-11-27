@@ -449,16 +449,22 @@ function takeSnapshot(){
 
 function start(mode){
   buildOverlay();
-  var s=takeSnapshot();
-  if(!s&&mode==='book'){
+  if(mode==='book'){
     var info=bookInfo(document.getElementById('bookText'));
-    var qq=window.prompt('سؤالك عن «'+(info.title||'هذا الكتاب')+'» — سيُجاب من نص الكتاب نفسه مع أرقام الفقرات:','');
+    var qq=window.prompt('اكتب سؤالك بالعربية عن الكتاب. سيُرسل السؤال مع الفقرات ذات الصلة إلى تطبيق ذكاء اصطناعي خارجي تختاره:','');
     if(!qq||!qq.trim()) return;
-    snap={text:'',book:info.title,author:info.author,pid:'',before:'',after:''};
-    var c0=cfg();
-    if(getProv()!=='claude'&&(!c0.url||c0.pass.length<16)){ openSettings(function(){ prepareBookAndGo('book',snap,qq.trim()); }); return; }
-    buildOverlay(); els.q.value=qq.trim(); prepareBookAndGo('book',snap,qq.trim()); return;
+    var question=qq.trim(), paras=retrieve(question,0);
+    var lines=[];
+    lines.push('أجب عن السؤال التالي اعتماداً على النصوص المرفقة من الكتاب فقط. اكتب الإجابة بالعربية، واذكر أرقام الفقرات التي استندت إليها، ونبّه إذا لم تكن النصوص كافية.');
+    if(info.title) lines.push('الكتاب: '+info.title+(info.author?' — المؤلف: '+info.author:''));
+    lines.push('سؤال الباحث: '+question);
+    if(paras.length) lines.push('الفقرات المسترجعة من الكتاب:\\n\\n'+paras.map(function(p){return '[فقرة '+p.pid+'] '+p.text;}).join('\\n\\n'));
+    else lines.push('لم يتمكن القارئ من استرجاع فقرات تلقائياً. اطلب من النموذج توضيح أن الإجابة لا يمكن استنتاجها من النص المرفق.');
+    var payload=lines.join('\\n\\n');
+    doShare('سؤال عن الكتاب'+(info.title?' — '+info.title:''),payload);
+    return;
   }
+  var s=takeSnapshot();
   if(!s){
     if(snap&&ov.classList.contains('show')){ s=snap; }
     else { toast('حدّد نصاً في الكتاب أولاً ثم اضغط الزر.'); return; }
