@@ -383,11 +383,19 @@ function build(){
    كانت شروط ready() الصارمة تؤخر تنظيم الشريط حتى 6 ثوانٍ، فيظهر الشريط القديم مزدحماً
    وقد يبدو كأنه لم يُحدّث. sweep() وMutationObserver يصنفان الأزرار التي تصل لاحقاً. */
 function init(){
+  // حاول فوراً ثم أعد المحاولة عند ظهور tb1 أو تغير DOM؛ لا يعتمد على انتظار ثابت.
+  try{ if($('tb1')){ build(); if(built) return; } }catch(e){}
   var n=0, t=setInterval(function(){
     n++;
-    if($('tb1')){ clearInterval(t); build(); }
-    else if(n>50) clearInterval(t);
-  },80);
+    try{ if($('tb1')){ build(); if(built){ clearInterval(t); return; } } }catch(e){}
+    if(n>100) clearInterval(t);
+  },100);
+  try{
+    var mo=new MutationObserver(function(){
+      if(!built&&$('tb1')){ try{build(); if(built) mo.disconnect();}catch(e){} }
+    });
+    mo.observe(document.documentElement,{childList:true,subtree:true});
+  }catch(e){}
 }
 if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',init); else init();
 
