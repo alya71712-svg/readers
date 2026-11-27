@@ -456,8 +456,8 @@ function start(mode){
     if(!qq||!qq.trim()) return;
     snap={text:'',book:info.title,author:info.author,pid:'',before:'',after:''};
     var c0=cfg();
-    if(getProv()!=='claude'&&(!c0.url||c0.pass.length<16)){ openSettings(function(){ go('book',snap,qq.trim()); }); return; }
-    buildOverlay(); els.q.value=qq.trim(); go('book',snap,qq.trim()); return;
+    if(getProv()!=='claude'&&(!c0.url||c0.pass.length<16)){ openSettings(function(){ prepareBookAndGo('book',snap,qq.trim()); }); return; }
+    buildOverlay(); els.q.value=qq.trim(); prepareBookAndGo('book',snap,qq.trim()); return;
   }
   if(!s){
     if(snap&&ov.classList.contains('show')){ s=snap; }
@@ -469,11 +469,36 @@ function start(mode){
   start2(mode);
 }
 // بعد ضبط الإعدادات لا نلتقط التحديد من جديد (قد ضاع) بل نستعمل اللقطة
-function start2(mode){ if(snap) go(mode,snap,''); }
+function start2(mode){ if(snap) prepareBookAndGo(mode,snap,''); }
 function rerun(mode){
   if(!snap) return;
   var q=els.q.value.trim();
-  go(mode,snap,q);
+  prepareBookAndGo(mode,snap,q);
+}
+// ترجمة سؤال الباحث إلى لغة الكتاب لتحسين الاسترجاع؛ تظل الإجابة باللغة العربية.
+function translateBookQuery(c,question,bookText){
+  if(!question||!/[\u0600-\u06FF]/.test(question)||!c.url||c.pass.length<16) return Promise.resolve('');
+  var headers={'content-type':'application/json','x-assistant-pass':c.pass}; if(c.key) headers.apikey=c.key;
+  var body={provider:'gemini',native:{systemInstruction:{parts:[{text:'Translate the Arabic research question into the language of the book text. Return only a concise translated question and search keywords, no explanations. Preserve proper names and historical terms.'}]},contents:[{role:'user',parts:[{text:'Question: '+question+'\nBook sample: '+(bookText||'').slice(0,900)}]}],generationConfig:{temperature:0.1,maxOutputTokens:256}};
+  var m=(lsGet(K_MODEL)||'').trim(); if(/^gemini-/.test(m)) body.model=m;
+  return fetch(c.url,{method:'POST',headers:headers,body:JSON.stringify(body)}).then(function(res){if(!res.ok) throw new Error('translation failed'); return res.text();}).then(function(raw){
+    var out='';
+    raw.split(/\n\n/).forEach(function(block){ block.split('\n').forEach(function(line){
+      if(line.indexOf('data:')!==0)return;
+      try{var ev=JSON.parse(line.slice(5).trim());var ps=ev.candidates&&ev.candidates[0]&&ev.candidates[0].content&&ev.candidates[0].content.parts||[];ps.forEach(function(p){if(p.text&&!p.thought)out+=p.text;});}catch(e){}
+    });});
+    return out.trim();
+  }).catch(function(){return '';});
+}
+function prepareBookAndGo(mode,s,q){
+  if(mode!=='book'){go(mode,s,q);return;}
+  var c=cfg(), question=q||s.text||'';
+  s.bookSearchTerms='';
+  els.status.textContent='🌐 يترجم سؤال البحث تلقائياً إلى لغة الكتاب لتحسين العثور على الفقرات…';
+  translateBookQuery(c,question,bookParagraphs().slice(0,3).map(function(p){return p.text;}).join(' ')).then(function(translated){
+    if(translated) s.bookSearchTerms=translated;
+    go(mode,s,q);
+  });
 }
 
 function go(mode,s,q){
@@ -491,9 +516,9 @@ function go(mode,s,q){
 
   if(mode==='book'){
     var pin=parseInt(s.pid,10)||0;
-    s=Object.assign({},s,{passages:retrieve((q||'')+' '+(s.text||''),pin)});
+    s=Object.assign({},s,{passages:retrieve((q||'')+' '+(s.bookSearchTerms||'')+' '+(s.text||''),pin)});
     if(!s.passages.length){ els.stop.style.display='none'; els.status.textContent='';
-      els.err.textContent='⚠ لم أجد في هذا الكتاب فقرات تطابق السؤال. جرّب كلمات وردت في النص نفسه وبلغته (إن كان الكتاب بالإنجليزية مثلاً فاسأل بكلماته الإنجليزية).'; return; }
+      els.err.textContent='⚠ لم أجد فقرات مناسبة. حاول صياغة السؤال بالعربية مرة أخرى؛ يقوم النظام بترجمة كلمات البحث تلقائياً إلى لغة الكتاب، وقد تكون بعض المصطلحات الخاصة غير مألوفة.'; return; }
     showPassages(s.passages);
   }
   var ac=new AbortController(); var me={ac:ac,mode:mode}; run=me;
@@ -563,7 +588,7 @@ function showPassages(list){
   els.src.appendChild(mk('strong',{text:'الفقرات التي بُني عليها الجواب ('+list.length+')'}));
   var ol=mk('ul');
   list.forEach(function(p){
-    var t=p.text.length>220?p.text.slice(0,220)+'…':p.text;
+    var t=p.text;
     ol.appendChild(mk('li',{},[mk('b',{text:'فقرة '+p.pid+': '}),document.createTextNode(t)]));
   });
   els.src.appendChild(ol);
