@@ -57,6 +57,7 @@
     html = html.replace(/reader-academic\.js\?v=\d+/g, 'reader-academic.js?v=23');
     html = html.replace(/reader-pick\.js\?v=\d+/g, 'reader-pick.js?v=5');
     html = html.replace(/reader-ai\.js\?v=\d+/g, 'reader-ai.js?v=12');
+    html = html.replace(/reader-menu\.js\?v=\d+/g, 'reader-menu.js?v=11');
     var at = html.search(/<\/head>/i);
     if(at < 0) throw new Error('الملف المحفوظ في السحابة غير مكتمل.');
     // بعد الرفع يعرف القارئ أنه مخصّص (زر التحميل يجلب نسخته من السحابة). data-rc-inject تُزال عند أي إعادة رفع.
