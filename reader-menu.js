@@ -379,16 +379,15 @@ function build(){
   built=true;
 }
 
-/* ننتظر حتى تنتهي السكربتات الأخرى من حقن أزرارها (الذكاء: #tb-home وأزرار الشرح/البحث، والأكاديمي: منصات البحث العلمي) */
-function ready(){
-  var t=$('tb1'); if(!t) return false;
-  return !!($('tb-home')&&$('reader-research-wrap')&&t.querySelector('.ai-sel'));
-}
+/* نبني الدرج بمجرد ظهور شريط الأدوات، ولا نؤخره انتظاراً لحقن أدوات AI/البحث.
+   كانت شروط ready() الصارمة تؤخر تنظيم الشريط حتى 6 ثوانٍ، فيظهر الشريط القديم مزدحماً
+   وقد يبدو كأنه لم يُحدّث. sweep() وMutationObserver يصنفان الأزرار التي تصل لاحقاً. */
 function init(){
   var n=0, t=setInterval(function(){
     n++;
-    if(ready()||n>50){ clearInterval(t); build(); }   // 50×120ms ≈ 6 ثوانٍ كحدٍّ أقصى ثم نبني بما هو موجود
-  },120);
+    if($('tb1')){ clearInterval(t); build(); }
+    else if(n>50) clearInterval(t);
+  },80);
 }
 if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',init); else init();
 
