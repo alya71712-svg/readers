@@ -485,7 +485,7 @@ function rerun(mode){
 function translateBookQuery(c,question,bookText){
   if(!question||!/[\u0600-\u06FF]/.test(question)||!c.url||c.pass.length<16) return Promise.resolve('');
   var headers={'content-type':'application/json','x-assistant-pass':c.pass}; if(c.key) headers.apikey=c.key;
-  var body={provider:'gemini',native:{systemInstruction:{parts:[{text:'Translate the Arabic research question into the language of the book text. Return only a concise translated question and search keywords, no explanations. Preserve proper names and historical terms.'}]},contents:[{role:'user',parts:[{text:'Question: '+question+'\nBook sample: '+(bookText||'').slice(0,900)}]}],generationConfig:{temperature:0.1,maxOutputTokens:256}};
+  var body={provider:'gemini',native:{systemInstruction:{parts:[{text:'Translate the Arabic research question into the language of the book text. Return only a concise translated question and search keywords, no explanations. Preserve proper names and historical terms.'}]},contents:[{role:'user',parts:[{text:'Question: '+question+'\nBook sample: '+(bookText||'').slice(0,900)}]}],generationConfig:{temperature:0.1,maxOutputTokens:256}}};
   var m=(lsGet(K_MODEL)||'').trim(); if(/^gemini-/.test(m)) body.model=m;
   return fetch(c.url,{method:'POST',headers:headers,body:JSON.stringify(body)}).then(function(res){if(!res.ok) throw new Error('translation failed'); return res.text();}).then(function(raw){
     var out='';

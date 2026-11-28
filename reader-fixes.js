@@ -482,14 +482,7 @@
   };
 
   function install(){
-    // إصلاح حالة الأدوات القديمة: تبدأ مطوية على الهاتف لتطابق واجهة القراءة المريحة.
-    try{
-      if(typeof toolbarsVisible !== 'undefined') toolbarsVisible = false;
-      ['tb1','tb2'].forEach(function(id){var el=document.getElementById(id);if(el)el.style.display='none';});
-      var h=document.getElementById('tb-hider');if(h)h.classList.add('bars-hidden');
-      var label=document.getElementById('hider-label');if(label)label.textContent='▲ إظهار الأدوات';
-      if(typeof updateToolbarFab==='function') updateToolbarFab();
-    }catch(e){}
+    // (أُزيل إخفاء الشريط القسري عند التحميل: كان يخفي tb1/tb2 دائماً فتختفي لوحة الأدوات العلوية. الشريط يظهر افتراضياً ويتحكم به زر الإخفاء/الإظهار.)
     if(typeof renderAI === 'function') window.renderAI = renderAI2;
     if(typeof updatePagePill === 'function'){
       window.updatePagePill = updatePagePill2;
