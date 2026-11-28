@@ -206,6 +206,20 @@ var CSS=[
 '#rai-sh label{display:block;margin:10px 0 3px;font-size:13px;font-family:sans-serif;color:var(--text2,#555)}',
 '#rai-sh-in{width:100%;box-sizing:border-box;padding:10px;font-size:16px;border:1px solid var(--border,#ccc);border-radius:4px;background:var(--bg2,#eee);color:var(--text,#111);font-family:inherit}',
 '#rai-sh .row{display:flex;gap:8px;margin-top:14px}#rai-sh .row .tbtn{flex:1;min-height:42px;font-size:15px}',
+'#rai-bq{position:fixed;inset:0;z-index:10001;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.55);direction:rtl}',
+'#rai-bq.show{display:flex}',
+'#rai-bq .box{background:var(--bg,#fff);color:var(--text,#111);border:1px solid var(--border,#ccc);border-radius:8px;padding:14px;width:min(94vw,520px);max-height:92vh;overflow:auto}',
+'#rai-bq .hd{display:flex;align-items:center;justify-content:space-between;gap:8px}',
+'#rai-bq .hint{font-size:12.5px;line-height:1.7;color:var(--text2,#555);font-family:sans-serif;margin-top:6px}',
+'#rai-bq label{display:block;margin:10px 0 3px;font-size:13px;font-family:sans-serif;color:var(--text2,#555)}',
+'#rai-bq textarea,#rai-bq input[type=text]{width:100%;box-sizing:border-box;padding:10px;font-size:16px;border:1px solid var(--border,#ccc);border-radius:4px;background:var(--bg2,#eee);color:var(--text,#111);font-family:inherit}',
+'#rai-bq .seg{display:flex;gap:6px}#rai-bq .seg .tbtn{flex:1;min-height:42px;font-size:14px}#rai-bq .seg .tbtn.on{background:var(--gold,#a80);color:var(--bg,#fff)}',
+'#rai-bq .row{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}#rai-bq .row .tbtn{flex:1 1 28%;min-height:44px;font-size:15px}',
+'#rai-bq-st{font-size:13px;line-height:1.7;color:var(--text2,#555);font-family:sans-serif;margin-top:8px;white-space:pre-line}',
+'#rai-bq-list{margin-top:6px;max-height:34vh;overflow:auto;border:1px solid var(--border,#ccc);border-radius:4px}',
+'#rai-bq-list .it{display:flex;gap:6px;align-items:flex-start;padding:7px 9px;border-bottom:1px solid var(--border,#ddd);font-size:13px;line-height:1.6}',
+'#rai-bq-list .it .tx{flex:1;min-width:0}#rai-bq-list .it .sn{direction:ltr;text-align:left;color:var(--text2,#555);overflow-wrap:anywhere}',
+'#rai-bq-list .it .tbtn{min-width:40px;min-height:36px}',
 /* --- نافذة تصدير نتائج البحث (Markdown) --- */
 '#rai-ex{position:fixed;inset:0;z-index:10000;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.55);direction:rtl}',
 '#rai-ex.show{display:flex}',
@@ -449,21 +463,7 @@ function takeSnapshot(){
 
 function start(mode){
   buildOverlay();
-  if(mode==='book'){
-    var info=bookInfo(document.getElementById('bookText'));
-    var qq=window.prompt('اكتب سؤالك بالعربية عن الكتاب. سيُرسل السؤال مع الفقرات ذات الصلة إلى تطبيق ذكاء اصطناعي خارجي تختاره:','');
-    if(!qq||!qq.trim()) return;
-    var question=qq.trim(), paras=retrieve(question,0);
-    var lines=[];
-    lines.push('أجب عن السؤال التالي اعتماداً على النصوص المرفقة من الكتاب فقط. اكتب الإجابة بالعربية، واذكر أرقام الفقرات التي استندت إليها، ونبّه إذا لم تكن النصوص كافية.');
-    if(info.title) lines.push('الكتاب: '+info.title+(info.author?' — المؤلف: '+info.author:''));
-    lines.push('سؤال الباحث: '+question);
-    if(paras.length) lines.push('الفقرات المسترجعة من الكتاب:\\n\\n'+paras.map(function(p){return '[فقرة '+p.pid+'] '+p.text;}).join('\\n\\n'));
-    else lines.push('لم يتمكن القارئ من استرجاع فقرات تلقائياً. اطلب من النموذج توضيح أن الإجابة لا يمكن استنتاجها من النص المرفق.');
-    var payload=lines.join('\\n\\n');
-    doShare('سؤال عن الكتاب'+(info.title?' — '+info.title:''),payload);
-    return;
-  }
+  if(mode==='book'){ openAskBook(); return; }
   var s=takeSnapshot();
   if(!s){
     if(snap&&ov.classList.contains('show')){ s=snap; }
@@ -477,24 +477,48 @@ function start(mode){
 // بعد ضبط الإعدادات لا نلتقط التحديد من جديد (قد ضاع) بل نستعمل اللقطة
 function start2(mode){ if(snap) prepareBookAndGo(mode,snap,''); }
 function rerun(mode){
+  if(mode==='book'){ openAskBook(els.q?els.q.value.trim():''); return; }
   if(!snap) return;
   var q=els.q.value.trim();
   prepareBookAndGo(mode,snap,q);
 }
 // ترجمة سؤال الباحث إلى لغة الكتاب لتحسين الاسترجاع؛ تظل الإجابة باللغة العربية.
-function translateBookQuery(c,question,bookText){
-  if(!question||!/[\u0600-\u06FF]/.test(question)||!c.url||c.pass.length<16) return Promise.resolve('');
+function translateBookQuery(c,question,sample){
+  if(!question||!/[؀-ۿ]/.test(question)||!c.url||c.pass.length<16) return Promise.resolve('');
+  var usr='Question (Arabic): '+question+'\nCorpus sample:\n'+String(sample||'').slice(0,1200);
   var headers={'content-type':'application/json','x-assistant-pass':c.pass}; if(c.key) headers.apikey=c.key;
-  var body={provider:'gemini',native:{systemInstruction:{parts:[{text:'Translate the Arabic research question into the language of the book text. Return only a concise translated question and search keywords, no explanations. Preserve proper names and historical terms.'}]},contents:[{role:'user',parts:[{text:'Question: '+question+'\nBook sample: '+(bookText||'').slice(0,900)}]}],generationConfig:{temperature:0.1,maxOutputTokens:256}}};
-  var m=(lsGet(K_MODEL)||'').trim(); if(/^gemini-/.test(m)) body.model=m;
-  return fetch(c.url,{method:'POST',headers:headers,body:JSON.stringify(body)}).then(function(res){if(!res.ok) throw new Error('translation failed'); return res.text();}).then(function(raw){
-    var out='';
-    raw.split(/\n\n/).forEach(function(block){ block.split('\n').forEach(function(line){
-      if(line.indexOf('data:')!==0)return;
-      try{var ev=JSON.parse(line.slice(5).trim());var ps=ev.candidates&&ev.candidates[0]&&ev.candidates[0].content&&ev.candidates[0].content.parts||[];ps.forEach(function(p){if(p.text&&!p.thought)out+=p.text;});}catch(e){}
-    });});
-    return out.trim();
-  }).catch(function(){return '';});
+  function clean(t){ return String(t||'').replace(/<think>[\s\S]*?<\/think>/g,'').trim(); }
+  function sse(res,pick){
+    return res.text().then(function(raw){
+      var out='';
+      raw.replace(/\r\n/g,'\n').split('\n').forEach(function(line){
+        if(line.indexOf('data:')!==0) return;
+        var d=line.slice(5).trim(); if(!d||d==='[DONE]') return;
+        try{ out+=pick(JSON.parse(d))||''; }catch(e){}
+      });
+      return out;
+    });
+  }
+  function viaGemini(){
+    var body={provider:'gemini',native:{systemInstruction:{parts:[{text:TR_SYS}]},contents:[{role:'user',parts:[{text:usr}]}],generationConfig:{temperature:0.1,maxOutputTokens:1024}}};
+    var m=(lsGet(K_MODEL)||'').trim(); if(/^gemini-/.test(m)) body.model=m;
+    return fetchText(c.url,{method:'POST',headers:headers,body:JSON.stringify(body)},25000).then(function(res){
+      if(!res.ok) throw new Error('translation '+res.status);
+      return sse(res,function(ev){ var ps=(ev.candidates&&ev.candidates[0]&&ev.candidates[0].content&&ev.candidates[0].content.parts)||[]; return ps.map(function(p){ return p.text&&!p.thought?p.text:''; }).join(''); });
+    });
+  }
+  // إن تعذّر Gemini (حدّ الطلبات مثلاً) نجرّب النموذج المجاني نفسه عبر الدالة
+  function viaOpen(){
+    var body={provider:'openrouter',model:OPEN_DEFAULT,messages:[{role:'system',content:TR_SYS},{role:'user',content:usr}],max_tokens:400};
+    return fetchText(c.url,{method:'POST',headers:headers,body:JSON.stringify(body)},30000).then(function(res){
+      if(!res.ok) throw new Error('translation '+res.status);
+      return sse(res,function(ev){ var ch=ev.choices&&ev.choices[0]; return (ch&&((ch.delta&&ch.delta.content)||(ch.message&&ch.message.content)))||''; });
+    });
+  }
+  return viaGemini().catch(function(){ return ''; }).then(function(t){
+    t=clean(t); if(t) return t;
+    return viaOpen().catch(function(){ return ''; }).then(clean);
+  });
 }
 function prepareBookAndGo(mode,s,q){
   if(mode!=='book'){go(mode,s,q);return;}
@@ -503,7 +527,7 @@ function prepareBookAndGo(mode,s,q){
   els.status.textContent='🌐 يترجم سؤال البحث تلقائياً إلى لغة الكتاب لتحسين العثور على الفقرات…';
   translateBookQuery(c,question,bookParagraphs().slice(0,3).map(function(p){return p.text;}).join(' ')).then(function(translated){
     if(translated) s.bookSearchTerms=translated;
-    s.bookTranslationFailed=!!question&&/[\\u0600-\\u06FF]/.test(question)&&!translated;
+    s.bookTranslationFailed=!!question&&/[\u0600-\u06FF]/.test(question)&&!translated;
     go(mode,s,q);
   });
 }
@@ -523,7 +547,7 @@ function go(mode,s,q){
 
   if(mode==='book'){
     var pin=parseInt(s.pid,10)||0;
-    s=Object.assign({},s,{passages:retrieve((q||'')+' '+(s.bookSearchTerms||'')+' '+(s.text||''),pin),bookTranslationFailed:!!s.bookTranslationFailed});
+    if(!(s.passages&&s.passages.length)) s=Object.assign({},s,{passages:retrieve((q||'')+' '+(s.bookSearchTerms||'')+' '+(s.text||''),pin),bookTranslationFailed:!!s.bookTranslationFailed});
     if(!s.passages.length){ els.stop.style.display='none'; els.status.textContent='';
       els.err.textContent='⚠ لم أجد فقرات مناسبة. '+(s.bookTranslationFailed?'تعذّرت الترجمة التلقائية هذه المرة؛ تحقق من اتصال الإنترنت وإعدادات المساعد ثم أعد المحاولة. ':'')+'يمكنك إعادة صياغة السؤال بالعربية؛ النظام يحاول ترجمة كلمات البحث إلى لغة الكتاب.'; return; }
     showPassages(s.passages);
@@ -596,7 +620,7 @@ function showPassages(list){
   var ol=mk('ul');
   list.forEach(function(p){
     var t=p.text;
-    ol.appendChild(mk('li',{},[mk('b',{text:'فقرة '+p.pid+': '}),document.createTextNode(t)]));
+    ol.appendChild(mk('li',{},[mk('b',{text:(p.lab||('فقرة '+p.pid))+': '}),document.createTextNode(t)]));
   });
   els.src.appendChild(ol);
 }
@@ -662,7 +686,7 @@ var PERSONA_O='أنت مساعد بحثي لباحث عربي مستقل يعم�
   'لا تنقل مقاطع طويلة من المصادر حرفياً؛ لخّص بصياغتك.';
 var SYS_BOOK=PERSONA_O.replace('لا تنقل مقاطع طويلة من المصادر حرفياً؛ لخّص بصياغتك.','')+
   '\n\nالمهمة: أجب عن سؤال الباحث اعتماداً حصرياً على الفقرات المسترجعة من الكتاب المرفقة، لا من معرفتك العامة. '+
-  'القواعد: (١) كل ادعاء في جوابك يُسند إلى فقرة بذكر رقمها هكذا [فقرة 12]. '+
+  'القواعد: (١) كل ادعاء في جوابك يُسند إلى فقرة بذكر وسمها كما ورد بين قوسين معقوفين، مثل [فقرة 12] أو [فقرة 12 — عنوان الكتاب]. '+
   '(٢) استشهد بعبارات قصيرة منقولة حرفياً بين «» من الفقرات نفسها كما وردت، ولا تغيّر حرفاً داخل علامات الاقتباس. '+
   '(٣) إن لم تجب الفقرات عن السؤال أو أجابت عن جزء منه فقل صراحة: «لا يجيب النص المتاح عن هذا» وبيّن ما ينقص، ولا تكمل من عندك. '+
   '(٤) إن أضفت توضيحاً من خارج النص فضعه في فقرة أخيرة مستقلة بعنوان «من خارج النص» وصرّح بأنه غير مستند إلى الكتاب. '+
@@ -693,12 +717,30 @@ function stemAr(w){
   if(w.length>4) w=w.replace(/(ات|ون|ين|ها|هم|يه|ه|ي)$/,'');
   return w;
 }
-function tokens(t){
-  return normAr(t).split(/[^\p{L}\p{N}]+/u).filter(function(w){ return w.length>1&&!AR_STOP[w]; }).map(stemAr);
+var LAT_STOP={};
+('the of and to in an is are was were be been being that this these those it its as at by for from on or with his her their he she they we you not but if so no nor than then there what which who whom whose how why when where does did do has have had will would can could should may might shall must into out up about over also only very such more most other some any each both between through during under after before own same too '+
+ 'le la les un une des du de et en dans que qui est sont etait ete pour par sur avec ce cette ces se sa son ses leur leurs il elle ils elles nous vous ne pas plus mais ou donc car au aux ni si comme quand dont '+
+ 'lo gli uno di del della dei delle che per con su da non piu ma come el los las por para es fue et ad est ut cum quod').split(' ').forEach(function(w){ if(w) LAT_STOP[w]=1; });
+// تطبيع شامل: العربية (كما كان) ثم إزالة علامات التشكيل اللاتينية/اليونانية (é → e) ليتطابق Héraclius مع Heraclius
+function normAny(t){
+  var s=normAr(t);
+  try{ s=s.normalize('NFD').replace(/[\u0300-\u036f]/g,''); }catch(e){}
+  return s;
 }
-function bookParagraphs(){
+// الجذر: العربية بالدالة السابقة؛ اللاتينية بحذف s الجمع ثم اقتطاع أول 6 أحرف (salvation/salvations → salvat)
+function stemAny(w){
+  var c=w.charCodeAt(0);
+  if(c>=1536&&c<=1791) return stemAr(w);
+  if(w.length>4&&w.charAt(w.length-1)==='s') w=w.slice(0,-1);
+  return w.length>6?w.slice(0,6):w;
+}
+function tokens(t){
+  return normAny(t).split(RE_SPLIT).filter(function(w){ return w.length>1&&!AR_STOP[w]&&!LAT_STOP[w]; }).map(stemAny);
+}
+function bookParagraphs(){ return paragraphsOf(library[cur]); }
+function paragraphsOf(b){
   try{
-    var b=library[cur]; if(!b||!b.content) return [];
+    if(!b||!b.content) return [];
     var plan=sxPlan(b), offs=plan.offs, txt=b.content;
     if(plan.items){ var pm=getPageMap(b); if(pm&&pm.displayContent) txt=pm.displayContent; }
     if(!offs.length) offs=[0];
@@ -732,13 +774,238 @@ function retrieve(query,pinPid){
   }
   return pick.sort(function(a,b){ return a.pid-b.pid; });
 }
+/* ---------- اسأل الكتاب (ask book): سؤال عربي ← نصوص بلغات أخرى ---------- */
+// نصوص القارئات لاتينية (إنجليزية/فرنسية/إيطالية…) وسؤال الباحث عربي، فيلزم جسر لغوي:
+// ١) يُترجَم السؤال إلى كلمات بحث بلغة الكتاب (وتظهر في حقل يعدّله الباحث بنفسه إن أخفقت الترجمة).
+// ٢) يُمسح الكتاب (أو كل كتب القارئ) على دفعات بلا تجميد للشاشة، ويُرتَّب بصيغة TF-IDF.
+// ٣) تُعرض الفقرات المسترجعة ليراجعها الباحث، ثم يجيب هنا أو يشارك الطلب مع تطبيق خارجي بنص سليم.
+var K_BQSCOPE='readers_bq_scope';
+var RE_SPLIT=/[^\p{L}\p{N}]+/u;
+var TR_SYS='You help a researcher search a corpus. The researcher asks a question in Arabic; the corpus text is in the language(s) shown in the sample. '+
+  'Output exactly two lines. Line 1: the question translated into the corpus language (if the sample mixes languages use the dominant one). '+
+  'Line 2: 8-14 search keywords in the corpus language, comma-separated, base forms, with key synonyms and proper names in the alternative spellings used in scholarly translations '+
+  '(for example: Origen, Origène, Origenes). No explanations, no labels.';
+var bq=null, bqEls={}, bqSel=null, bqPass=[], bqScope='book', bqToken=0, bqQ='';
+
+function arabicShare(t){
+  var a=(String(t||'').match(/[؀-ۿ]/g)||[]).length, l=(String(t||'').match(/[A-Za-zÀ-ɏͰ-Ͽ؀-ۿ]/g)||[]).length;
+  return l?a/l:0;
+}
+// عيّنة من نص الكتاب (أو من أربعة كتب موزّعة في القارئ) لمعرفة لغة النصوص
+function bqSample(scope){
+  var idx=[], i;
+  if(scope==='all'&&library.length>1){ var n=Math.min(4,library.length); for(i=0;i<n;i++) idx.push(Math.floor(i*library.length/n)); } else idx.push(cur);
+  return idx.map(function(j){
+    var c=(library[j]&&library[j].content)||'', at=Math.min(1500,Math.max(0,c.length-400));
+    return c.slice(at,at+350).replace(/\s+/g,' ');
+  }).join('\n---\n');
+}
+function fetchText(url,opts,ms){
+  var ac=new AbortController(), t=setTimeout(function(){ ac.abort(); },ms||25000);
+  opts.signal=ac.signal;
+  return fetch(url,opts).then(function(res){ clearTimeout(t); return res; },function(e){ clearTimeout(t); throw e; });
+}
+
+// مسح غير متزامن: يقرأ فقرات كل كتاب في النطاق ويحفظ المطابِقة فقط (ذاكرة قليلة حتى مع قارئ 14 ميغابايت)
+function askSearch(o,progress,done){
+  var books=[], i;
+  if(o.scope==='all') for(i=0;i<library.length;i++) books.push(i); else books.push(cur);
+  var terms=[], seen=Object.create(null);
+  tokens(o.question+' '+o.kw+' '+String(o.sel||'').slice(0,400)).forEach(function(w){ if(!seen[w]){ seen[w]=1; terms.push(w); } });
+  terms=terms.slice(0,60);
+  var qi=Object.create(null); terms.forEach(function(w,k){ qi[w]=k; });
+  var df=terms.map(function(){ return 0; }), hits=[], N=0, bi=0, paras=null, pi=0, token=++bqToken;
+  function step(){
+    if(token!==bqToken) return;                                  // أُلغي البحث (أُغلقت النافذة أو بدأ بحث جديد)
+    var t0=Date.now();
+    while(Date.now()-t0<30){
+      if(!paras){
+        if(bi>=books.length) return finish();
+        paras=paragraphsOf(library[books[bi]]); pi=0;
+        if(progress) progress(bi+1,books.length);
+      }
+      if(pi>=paras.length){ paras=null; bi++; continue; }
+      var p=paras[pi++]; N++;
+      var cnt=null, tk=normAny(p.text).split(RE_SPLIT);
+      for(var k=0;k<tk.length;k++){
+        var w=tk[k]; if(w.length<2) continue;
+        var ix=qi[stemAny(w)]; if(ix===undefined) continue;
+        if(!cnt) cnt={}; cnt[ix]=(cnt[ix]||0)+1;
+      }
+      if(cnt){ Object.keys(cnt).forEach(function(x){ df[x]++; }); hits.push({bi:books[bi],pid:p.pid,text:p.text,cnt:cnt}); }
+    }
+    setTimeout(step,0);
+  }
+  function finish(){
+    var alive=[]; terms.forEach(function(w,k){ if(df[k]>0) alive.push(k); });
+    var multi=books.length>1, pick=[], used=0, taken=Object.create(null);
+    function add(b,pid,text,sc){
+      var key=b+':'+pid; if(taken[key]) return false;
+      text=text.slice(0,BOOK_PARA_CAP); if(used+text.length>BOOK_MAX_CHARS) return false;
+      taken[key]=1; used+=text.length; pick.push({bi:b,pid:pid,text:text,sc:sc}); return true;
+    }
+    // فقرة التحديد وجارتاها دائماً (كالسلوك السابق)
+    if(o.pin) paragraphsOf(library[cur]).forEach(function(p){ if(Math.abs(p.pid-o.pin)<=1) add(cur,p.pid,p.text,1e6); });
+    var scored=hits.map(function(h){
+      var sc=0, hit=0;
+      alive.forEach(function(k){ var tf=h.cnt[k]; if(tf){ hit++; sc+=Math.log(1+N/df[k])*(1+Math.log(tf)); } });
+      return {h:h,hit:hit,sc:sc*(1+hit/alive.length)};                    // مكافأة تغطية كلمات السؤال الموجودة فعلاً في النصوص
+    }).sort(function(a,b){ return b.sc-a.sc; });
+    // اسم العلم وحده (Origen ×3 في فهرس المحتويات) لا يكفي: نفضّل الفقرات التي تجمع كلمتين مختلفتين على الأقل متى كان ذلك ممكناً
+    var strongN=0;
+    if(alive.length>=3){ var strong=scored.filter(function(x){ return x.hit>=2; }); strongN=strong.length; if(strong.length>=3) scored=strong; }
+    var perBook=Object.create(null), cap=multi?4:BOOK_MAX_PARAS, main=BOOK_MAX_PARAS-4, tops=[];
+    for(var k=0;k<scored.length&&pick.length<main;k++){
+      var h=scored[k].h; if((perBook[h.bi]||0)>=cap) continue;
+      if(add(h.bi,h.pid,h.text,scored[k].sc)){ perBook[h.bi]=(perBook[h.bi]||0)+1; if(tops.length<2) tops.push(h); }
+    }
+    // جارتا أقوى نتيجتين: الفقرة التالية ثم السابقة، فالجواب كثيراً ما يمتد خارج الفقرة المطابقة
+    tops.forEach(function(h){
+      var by={}; paragraphsOf(library[h.bi]).forEach(function(p){ by[p.pid]=p; });
+      [h.pid+1,h.pid-1].forEach(function(pid){ if(by[pid]&&pick.length<BOOK_MAX_PARAS) add(h.bi,pid,by[pid].text,0); });
+    });
+    pick.sort(function(a,b){ return a.bi-b.bi||a.pid-b.pid; });
+    done({passages:pick.map(function(p){
+      var ttl=String((library[p.bi]&&library[p.bi].title)||'').trim();
+      return {pid:p.pid,book:ttl,text:p.text,lab:'فقرة '+p.pid+(multi&&ttl?' — '+ttl:'')};
+    }),alive:alive.length,total:terms.length,scanned:N,strong:strongN});
+  }
+  step();
+}
+
+function buildAskBook(){
+  if(bq) return;
+  injectCss();
+  bqEls.ctx=mk('div',{class:'hint'});
+  bqEls.q=mk('textarea',{id:'rai-bq-q',rows:'3',placeholder:'اكتب سؤالك بالعربية، مثال: ما موقف أوريجانوس من الخلاص الشامل؟'});
+  bqEls.selNote=mk('div',{class:'hint'});
+  bqEls.s1=mk('button',{type:'button',class:'tbtn',text:'📖 هذا الكتاب',onclick:function(){ setBqScope('book'); }});
+  bqEls.s2=mk('button',{type:'button',class:'tbtn',text:'📚 كل كتب القارئ',onclick:function(){ setBqScope('all'); }});
+  bqEls.seg=mk('div',{class:'seg'},[bqEls.s1,bqEls.s2]);
+  bqEls.kw=mk('input',{id:'rai-bq-kw',type:'text',dir:'ltr',autocomplete:'off',autocapitalize:'off',spellcheck:'false',
+    placeholder:'Origen, salvation, restoration…',onkeydown:function(e){ if(e.key==='Enter'){ e.preventDefault(); bqRun(); } }});
+  bqEls.go=mk('button',{type:'button',class:'tbtn',text:'🔍 ابحث عن الفقرات',onclick:bqRun});
+  bqEls.st=mk('div',{id:'rai-bq-st'});
+  bqEls.cnt=mk('div',{class:'hint'});
+  bqEls.list=mk('div',{id:'rai-bq-list'});
+  bqEls.listWrap=mk('div',{},[bqEls.cnt,bqEls.list]); bqEls.listWrap.style.display='none';
+  bqEls.ans=mk('button',{type:'button',class:'tbtn',text:'💬 أجب هنا',onclick:bqAnswer,title:'يجيب القارئ نفسه بالمحرك المختار في شريط الذكاء'});
+  bqEls.shr=mk('button',{type:'button',class:'tbtn',text:'📤 مشاركة',onclick:function(){
+    var info=bookInfo($('bookText')); doShare('سؤال عن الكتاب'+(info.title?' — '+info.title:''),bqPayload()); }});
+  bqEls.cpy=mk('button',{type:'button',class:'tbtn',text:'📋 نسخ',onclick:function(){
+    copyText(bqPayload()); toast('✓ نُسخ السؤال مع الفقرات — الصقه في تطبيق الذكاء'); }});
+  bqEls.acts=mk('div',{class:'row'},[bqEls.ans,bqEls.shr,bqEls.cpy]); bqEls.acts.style.display='none';
+  var x=mk('button',{type:'button',class:'tbtn',text:'✕','aria-label':'إغلاق',onclick:closeAskBook});
+  var box=mk('div',{class:'box'},[
+    mk('div',{class:'hd'},[mk('strong',{text:'📖 اسأل الكتاب',style:'font-size:16px'}),x]),
+    bqEls.ctx,
+    mk('label',{text:'سؤالك'}),bqEls.q,bqEls.selNote,
+    mk('label',{text:'نطاق البحث'}),bqEls.seg,
+    mk('label',{text:'كلمات البحث بلغة الكتاب — تُملأ بالترجمة تلقائياً، ويمكنك كتابتها أو تعديلها'}),bqEls.kw,
+    mk('div',{class:'row'},[bqEls.go]),
+    bqEls.st,bqEls.listWrap,bqEls.acts
+  ]);
+  bq=mk('div',{id:'rai-bq',translate:'no',dir:'rtl',role:'dialog','aria-modal':'true',
+    onclick:function(e){ if(e.target===bq) closeAskBook(); }},[box]);
+  document.body.appendChild(bq);
+}
+function setBqScope(s){
+  bqScope=(s==='all'&&library.length>1)?'all':'book'; lsSet(K_BQSCOPE,bqScope);
+  bqEls.s1.classList.toggle('on',bqScope==='book'); bqEls.s2.classList.toggle('on',bqScope==='all');
+}
+function openAskBook(prefill){
+  buildAskBook();
+  var info=bookInfo($('bookText')), sel=null;
+  try{ sel=takeSnapshot(); }catch(e){}
+  bqSel=sel&&sel.text?sel:null;
+  bqEls.ctx.textContent='الكتاب المفتوح: '+(info.title||'—')+(info.author?' — '+info.author:'')+(library.length>1?'  ·  في القارئ '+library.length+' كتاباً':'');
+  bqEls.s2.textContent='📚 كل كتب القارئ ('+library.length+')';
+  bqEls.seg.style.display=library.length>1?'':'none';
+  setBqScope(lsGet(K_BQSCOPE)==='all'?'all':'book');
+  if(typeof prefill==='string'&&prefill) bqEls.q.value=prefill;
+  bqRenderSel();
+  bqEls.st.textContent=''; bqPass=[]; bqRender();
+  bq.classList.add('show');
+  try{ bqEls.q.focus({preventScroll:true}); }catch(e){}
+}
+function closeAskBook(){ bqToken++; if(bq) bq.classList.remove('show'); }
+function bqRenderSel(){
+  bqEls.selNote.textContent='';
+  if(!bqSel) return;
+  var t=bqSel.text.replace(/\s+/g,' ').trim();
+  bqEls.selNote.appendChild(document.createTextNode('النص المحدد'+(bqSel.pid?' (فقرة '+bqSel.pid+')':'')+' يُستعمل سياقاً للبحث: «'+(t.length>90?t.slice(0,90)+'…':t)+'» '));
+  bqEls.selNote.appendChild(mk('button',{type:'button',class:'tbtn',text:'إزالة',style:'min-height:30px;padding:2px 10px;font-size:12px',onclick:function(){ bqSel=null; bqRenderSel(); }}));
+}
+function bqRender(){
+  var L=bqEls.list; L.textContent='';
+  bqPass.forEach(function(p,i){
+    var snip=p.text.length>220?p.text.slice(0,220)+'…':p.text;
+    var rm=mk('button',{type:'button',class:'tbtn',text:'✕','aria-label':'استبعاد هذه الفقرة',onclick:function(){ bqPass.splice(i,1); bqRender(); }});
+    L.appendChild(mk('div',{class:'it'},[mk('div',{class:'tx'},[mk('b',{text:p.lab}),mk('div',{class:'sn',dir:'ltr',text:snip})]),rm]));
+  });
+  var has=bqPass.length>0;
+  bqEls.listWrap.style.display=has?'':'none'; bqEls.acts.style.display=has?'':'none';
+  bqEls.cnt.textContent=has?('الفقرات المختارة: '+bqPass.length+' — اضغط ✕ لاستبعاد ما لا يلزم'):'';
+}
+function bqRun(){
+  var q=bqEls.q.value.trim(), kw=bqEls.kw.value.trim();
+  if(!q&&!kw&&!bqSel){ bqEls.st.textContent='اكتب سؤالك أولاً.'; return; }
+  bqQ=q; bqPass=[]; bqRender(); bqEls.go.disabled=true;
+  var sample=bqSample(bqScope), needTr=!kw&&/[؀-ۿ]/.test(q)&&arabicShare(sample)<0.3, token=bqToken+1;
+  function fin(){ bqEls.go.disabled=false; }
+  var pr=Promise.resolve('');
+  if(needTr){
+    bqEls.st.textContent='🌐 أترجم سؤالك إلى لغة الكتاب…';
+    pr=translateBookQuery(cfg(),q,sample);
+  }
+  pr.then(function(tr){
+    if(tr){ kw=tr.replace(/\s*\n+\s*/g,' | '); bqEls.kw.value=kw; }
+    var failedTr=needTr&&!tr;
+    bqEls.st.textContent='🔎 أبحث في '+(bqScope==='all'?'كل كتب القارئ…':'الكتاب…');
+    askSearch({question:q,kw:kw,sel:bqSel&&bqSel.text,scope:bqScope,pin:bqSel&&parseInt(bqSel.pid,10)||0},
+      function(a,b){ if(b>1) bqEls.st.textContent='🔎 أبحث… كتاب '+a+' من '+b; },
+      function(r){
+        fin(); if(!bq||!bq.classList.contains('show')) return;
+        bqPass=r.passages; bqRender();
+        if(!r.passages.length){
+          bqEls.st.textContent=(failedTr
+            ?'تعذّرت الترجمة التلقائية، والكتاب بلغة غير العربية. اكتب كلمات البحث بلغة الكتاب في الحقل أعلاه (مثل: Origen, salvation) ثم اضغط «ابحث».'
+            :'لم أجد فقرات تطابق كلمات البحث ('+r.scanned+' فقرة ممسوحة). جرّب كلمات أخرى في الحقل أعلاه'+(bqScope==='book'&&library.length>1?'، أو اختر «كل كتب القارئ».':'.'));
+          return;
+        }
+        bqEls.st.textContent='وجدتُ '+r.passages.length+' فقرة (مسحتُ '+r.scanned+' فقرة).'
+          +(bqScope==='book'&&library.length>1&&r.alive>=3&&r.strong<3?'\n⚠ المطابقة ضعيفة في هذا الكتاب؛ جرّب «كل كتب القارئ».':'')
+          +(failedTr?'\n⚠ تعذّرت الترجمة التلقائية فبحثتُ بكلمات سؤالك كما هي؛ إن بدت النتائج ضعيفة فاكتب كلمات بلغة الكتاب في الحقل.':'')
+          +'\nراجعها ثم اختر: أجب هنا، أو شارك الطلب مع تطبيق خارجي.';
+      });
+  });
+}
+// نص الطلب لتطبيق خارجي: سطور حقيقية (لا \n حرفية) ووسم كل فقرة يحمل اسم كتابها عند البحث في عدة كتب
+function bqPayload(){
+  var info=bookInfo($('bookText')), L=[];
+  L.push('أجب عن سؤال الباحث اعتماداً على الفقرات المرفقة من الكتاب فقط، واكتب الجواب بالعربية. عند الاستشهاد اذكر الوسم نفسه بين قوسين معقوفين (مثل [فقرة 12])، وانقل العبارات القصيرة التي تستشهد بها بلغتها الأصلية بين «» دون تغيير. ميّز بين ما يقوله النص وما تستنتجه أنت. إن لم تكفِ الفقرات للإجابة فقل ذلك صراحة ولا تكمل من معرفتك العامة.');
+  if(bqScope==='all') L.push('المصدر: فقرات من عدة كتب في القارئ (وسم كل فقرة يتضمن عنوان كتابها).');
+  else if(info.title) L.push('الكتاب: '+info.title+(info.author?' — المؤلف: '+info.author:''));
+  L.push('سؤال الباحث: '+(bqQ||bqEls.q.value.trim()));
+  if(bqSel&&bqSel.text) L.push('النص الذي حدّده الباحث'+(bqSel.pid?' (فقرة '+bqSel.pid+')':'')+':\n'+bqSel.text.slice(0,1500));
+  L.push('الفقرات المسترجعة من الكتاب:\n\n'+bqPass.map(function(p){ return '['+p.lab+'] '+p.text; }).join('\n\n'));
+  return L.join('\n\n');
+}
+function bqAnswer(){
+  if(!bqPass.length) return;
+  var info=bookInfo($('bookText')), q=(bqQ||bqEls.q.value.trim());
+  var s={text:bqSel?bqSel.text:'',book:info.title,author:info.author,pid:bqSel?String(bqSel.pid||''):'',before:'',after:'',passages:bqPass.slice()};
+  snap=s; closeAskBook(); buildOverlay(); els.q.value=q;
+  go('book',s,q);
+}
+
 function subjectText(s,q){
   var L=[];
   if(s.passages){
     if(s.book) L.push('الكتاب: '+s.book+(s.author?' — '+s.author:''));
     if(q) L.push('سؤال الباحث:\n'+q);
     if(s.text) L.push('النص الذي حدّده الباحث'+(s.pid?' (الفقرة '+s.pid+')':'')+':\n'+s.text);
-    L.push('الفقرات المسترجعة من الكتاب (أجب منها وحدها):\n\n'+s.passages.map(function(p){ return '[فقرة '+p.pid+'] '+p.text; }).join('\n\n'));
+    L.push('الفقرات المسترجعة من الكتاب (أجب منها وحدها):\n\n'+s.passages.map(function(p){ return '['+(p.lab||('فقرة '+p.pid))+'] '+p.text; }).join('\n\n'));
     return L.join('\n\n');
   }
   if(s.book) L.push('الكتاب: '+s.book);
@@ -981,7 +1248,7 @@ function installBar(){
   tb1.appendChild(provSelect('ai-sel'));
   tb1.appendChild(b('📤 مشاركة','مشاركة النص المحدد مع مرجعه (الكتاب والفقرة) وسؤال إضافي اختياري عبر أي تطبيق أو نموذج على جهازك',function(){ shareSelection(); }));
   tb1.appendChild(b('⚙','إعدادات شريط الذكاء (رابط الدالة وكلمة المرور والنماذج)',function(){ openSettings(); }));
-  tb1.appendChild(b('📖 من الكتاب','اسأل عن هذا الكتاب: يُجاب من نصوصه مع اقتباسات وأرقام الفقرات (حدّد نصاً أو اكتب سؤالاً)',function(){ start('book'); }));
+  tb1.appendChild(b('📖 من الكتاب','اسأل الكتاب بالعربية: يُترجم سؤالك إلى لغة النصوص ويُبحث في الكتاب أو في كل كتب القارئ، ثم تجيب هنا أو تشارك الطلب لتطبيق خارجي',function(){ start('book'); }));
   tb1.appendChild(b('💡 شرح','يشرح النص المحدد',function(){ start('explain'); }));
   tb1.appendChild(b('🔎 بحث','بحث بالنص المحدد (Gemini: على الويب مع مصادر — المجاني: من معرفة النموذج)',function(){ start('search'); }));
   tb1.appendChild(b('🔬 بحث عميق','Gemini: تخطيط وعدة عمليات بحث ثم تقرير بمصادر (نحو دقيقة) — المجاني: تقرير من معرفة النموذج',function(){ start('deep'); }));
@@ -1203,7 +1470,7 @@ function installSearchExport(){
 
 function init(){
   // نسخة قارئ محفوظة قد تحمل نافذة/أنماط نسخة سابقة بلا مستمعين: نحذفها فتُبنى من جديد
-  Array.prototype.forEach.call(document.querySelectorAll('#rai-ov, #rai-set, #rai-sh, #rai-ex, #rai-style'),function(el){ if(el.parentNode) el.parentNode.removeChild(el); });
+  Array.prototype.forEach.call(document.querySelectorAll('#rai-ov, #rai-set, #rai-sh, #rai-ex, #rai-bq, #rai-style'),function(el){ if(el.parentNode) el.parentNode.removeChild(el); });
   injectCss();
   if(!installSearchExport()){
     var sn=0, st=setInterval(function(){ if(installSearchExport()||++sn>40) clearInterval(st); },250);
